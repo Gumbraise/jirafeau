@@ -303,6 +303,7 @@ if (php_sapi_name() == "cli") {
 
     require(JIRAFEAU_ROOT.'lib/template/footer.php');
 } else {
+    require(JIRAFEAU_ROOT . 'lib/template/header.php');
     jirafeau_fatal_error(t('ACCESS_KO'), $cfg);
 }
 ?>
