@@ -172,6 +172,7 @@ function run_setup(&$cfg)
     env_2_cfg_int($cfg, 'maximal_upload_size');
     env_2_cfg_string_array($cfg, 'upload_password');
     env_2_cfg_string_array($cfg, 'upload_ip');
+    env_2_cfg_string_array($cfg, 'admin_ip');
     env_2_cfg_string_array($cfg, 'upload_ip_nopassword');
     env_2_cfg_string_array($cfg, 'proxy_ip');
     env_2_cfg_bool($cfg, 'store_uploader_ip');

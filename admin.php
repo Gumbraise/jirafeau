@@ -44,7 +44,8 @@ if (php_sapi_name() == "cli") {
     } else {
         die("No command found. Should be admin.php <clean_expired|clean_async>.\n");
     }
-} else {
+// Second check: Challenge by IP
+} elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
     /* Disable admin interface if we have a empty admin password. */
     if (empty($cfg['admin_password']) && empty($cfg['admin_http_auth_user'])) {
         require(JIRAFEAU_ROOT . 'lib/template/header.php');
@@ -301,5 +302,7 @@ if (php_sapi_name() == "cli") {
     }
 
     require(JIRAFEAU_ROOT.'lib/template/footer.php');
+} else {
+    jirafeau_fatal_error(t('ACCESS_KO'), $cfg);
 }
 ?>

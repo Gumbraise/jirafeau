@@ -34,6 +34,7 @@ More details about options in `lib/config.original.php`.
 
 Available options:
 - `ADMIN_PASSWORD`: setup a specific admin password. If not set, a random password will be generated.
+- `ADMIN_IP`: set one or more ip allowed to access admin interface (separated by comma).
 - `WEB_ROOT`: setup a specific domain to point at when generating links (e.g. 'jirafeau.mydomain.com/').
 - `VAR_ROOT`: setup a specific path where to place files. default: '/data'.
 - `FILE_HASH`: can be set to `md5`, `partial_md5` or `random` (default).

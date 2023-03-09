@@ -108,6 +108,14 @@ $cfg['admin_password'] = '';
  */
 $cfg['admin_http_auth_user'] = '';
 
+/* List of IP allowed to access the admin interface.
+ * If the list is empty, then there is no admin interface restriction based on IP.
+ * Elements of the list can be a single IP (e.g. "123.45.67.89") or
+ * an IP range (e.g. "123.45.0.0/16").
+ * Note that CIDR notation is available for IPv4 only for the moment.
+ */
+$cfg['admin_ip'] = array();
+
 /* Allow user to select different options for file expiration time.
  * Possible values in array:
  * 'minute': file is available for one minute
