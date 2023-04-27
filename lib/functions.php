@@ -1638,7 +1638,8 @@ function jirafeau_add_ending_slash($path)
 
 function jirafeau_default_web_root()
 {
-    return $_SERVER['HTTP_HOST'] . str_replace('install.php', '', $_SERVER['REQUEST_URI']);
+    $url_scheme = (isset($_SERVER['HTTPS'])) ? 'https://' : 'http://';
+    return $url_scheme . $_SERVER['HTTP_HOST'] . str_replace('install.php', '', $_SERVER['REQUEST_URI']);
 }
 
 function jirafeau_get_download_stats($hash)
