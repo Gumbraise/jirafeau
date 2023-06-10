@@ -143,8 +143,11 @@ function jirafeau_human_size($octets)
 // Convert UTC timestamp to a datetime field
 function jirafeau_get_datetimefield($timestamp)
 {
-    $content = '<span class="datetime" data-datetime="' . strftime('%Y-%m-%d %H:%M', $timestamp) . '">'
-        . strftime('%Y-%m-%d %H:%M', $timestamp) . ' (GMT)</span>';
+
+    $ts = date_create("@" . $timestamp);
+    $content = '<span class="datetime" data-datetime="' . date_format($ts, 'Y-m-d H:i') . '">'
+        . date_format($ts, 'Y-m-d H:i') . ' (GMT)</span>';
+    
     return $content;
 }
 
