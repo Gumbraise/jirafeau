@@ -123,13 +123,13 @@ An other obvious basic security is to let access users to the site by HTTPS (mak
 
 Data encryption can be activated in options. This feature makes the server encrypt data and send the decryt key to the user (inside download URL).
 The decrypt key is not stored on the server so if you loose an url, you won't be able to retrieve file content.
-Encryption is configured to use AES256 in OFB mode.
+Encryption is configured to use [XChaCha20-Poly1305](https://en.wikipedia.org/wiki/ChaCha20-Poly1305).
 In case of security troubles on the server, attacker won't be able to access files.
 
 By activating this feature, you have to be aware of few things:
 -  Data encryption has a cost (cpu) and it takes more time for downloads to complete once file sent.
 -  During the download, the server will decrypt on the fly (and use resource).
--  This feature needs to have the mcrypt php module.
+-  This feature needs to have the Sodium php module.
 -  File de-duplication will stop to work (as we can't compare two encrypted files).
 -  Be sure your server do not log client's requests.
 -  Don't forget to enable https.
