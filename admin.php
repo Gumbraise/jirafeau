@@ -120,6 +120,10 @@ if (php_sapi_name() == "cli") {
         require(JIRAFEAU_ROOT . 'lib/template/header.php'); ?><h2><?php echo t('ADMIN_INTERFACE'); ?></h2><?php
         ?><h2>(version <?php echo JIRAFEAU_VERSION ?>)</h2><?php
 
+        if ($cfg['enable_crypt'] && !(extension_loaded('sodium'))) {
+            echo '<div class="error"><p>'.t('SODIUM_UNAVAILABLE').'</p></div>';
+        }
+
         ?><div id = "admin">
           <fieldset><legend><?php echo t('ACTIONS'); ?></legend>
           <table>

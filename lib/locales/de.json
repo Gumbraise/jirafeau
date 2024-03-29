@@ -1,4 +1,5 @@
 {
+    "SODIUM_UNAVAILABLE": "Verschlüsselung ist in der Konfiguration aktiviert, aber das PHP-Modul \"Sodium\" ist nicht verfügbar! Verschlüsselung ist nicht verfügbar!",
     "INSTALL_FILE_NOT_FOUND_TITLE": "",
     "INSTALL_FILE_NOT_FOUND_DESC": "",
     "2_W": "Zwei Wochen",

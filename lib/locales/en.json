@@ -1,4 +1,5 @@
 {
+    "SODIUM_UNAVAILABLE": "Encryption is enabled in configuration, but the Sodium PHP module is not loaded! Encryption is not available!",
     "INSTALL_FILE_NOT_FOUND_TITLE": "Installation file not found",
     "INSTALL_FILE_NOT_FOUND_DESC": "Installation is not complete and install.php file does not seem to exist",
     "REPORTING_AN_ISSUE": "Reporting an issue",
