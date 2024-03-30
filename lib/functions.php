@@ -460,8 +460,9 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
     if ($crypt == true && extension_loaded('sodium') == true) {
         $crypt_key = jirafeau_encrypt_file($file['tmp_name'], $file['tmp_name'].'crypt');
         if (strlen($crypt_key) > 0) {
-            $crypted = true;
-            rename($file['tmp_name'].'crypt', $file['tmp_name']);
+            if (rename($file['tmp_name'].'crypt', $file['tmp_name']) === true) {
+                $crypted = true;
+            }
         }
     }
 
@@ -1145,11 +1146,11 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
     $crypted = false;
     $crypt_key = '';
     if ($crypt == true && extension_loaded('sodium') == true) {
-        //$crypt_key = jirafeau_encrypt_file($p, $p);
         $crypt_key = jirafeau_encrypt_file($p, $p.'.crypt');
         if (strlen($crypt_key) > 0) {
-            $crypted = true;
-            rename($p.'.crypt', $p);
+            if (rename($p.'.crypt', $p) === true) {
+                $crypted = true;
+            }
         }
     }
 
