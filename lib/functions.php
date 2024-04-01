@@ -1267,22 +1267,27 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
     }
 
     /* Decrypt file. */
-    $r = fopen(VAR_FILES . $p . $link['hash'], 'rb');
+    $r = fopen($fp_src, 'rb');
+    $w = fopen($fp_dst, 'wb');
 
     $crypt_header = fread($r, SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES);
 
     /* Init module. */
-    $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $crypt_key);
+    $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
 
     /* Decrypt file. */
 
     for ($i = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES; $i < $fs; $i += JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES) {
         $to_dec = fread($r, JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES);
         [$dec, $crypt_tag] = sodium_crypto_secretstream_xchacha20poly1305_pull($crypt_state, $to_dec);
-        echo $dec;
+        
+        if (fwrite($w, $dec) === false) {
+            return false;
+        }
     }
 
     fclose($r);
+    fclose($w);
 
     /* Cleanup. */
     sodium_memzero($crypt_state);
