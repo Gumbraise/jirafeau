@@ -1213,15 +1213,15 @@ function jirafeau_crypt_create_iv($base, $size)
 }
 
 /**
- * Crypt file and returns decrypt key.
+ * Crypt file using Sodium and returns decrypt key.
  * @param $fp_src file path to the file to crypt.
- * @param $fp_dst file path to the file to write crypted file (could be the same).
+ * @param $fp_dst file path to the file to write crypted file (must not be the same).
  * @return decrypt key composed of the key and the iv separated by a point ('.')
  */
 function jirafeau_encrypt_file($fp_src, $fp_dst)
 {
     $fs = filesize($fp_src);
-    if ($fs === false || $fs == 0 || !(extension_loaded('sodium') == true)) {
+    if ($fs === false || $fs == 0 || extension_loaded('sodium') == false || $fp_src == $fp_dst) {
         return '';
     }
 
@@ -1253,16 +1253,16 @@ function jirafeau_encrypt_file($fp_src, $fp_dst)
 }
 
 /**
- * Decrypt file.
+ * Decrypt file using Sodium.
  * @param $fp_src file path to the file to decrypt.
- * @param $fp_dst file path to the file to write decrypted file (could be the same).
+ * @param $fp_dst file path to the file to write decrypted file (must not be the same).
  * @param $k string composed of the key and the iv separated by a point ('.')
  * @return key used to decrypt. a string of length 0 is returned if failed.
  */
 function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
 {
     $fs = filesize($fp_src);
-    if ($fs === false || $fs == 0 || extension_loaded('sodium') == false) {
+    if ($fs === false || $fs == 0 || extension_loaded('sodium') == false || $fp_src == $fp_dst) {
         return false;
     }
 
@@ -1291,7 +1291,7 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
 }
 
 /**
- * Decrypt file.
+ * Decrypt file using mcrypt.
  * @param $fp_src file path to the file to decrypt.
  * @param $fp_dst file path to the file to write decrypted file (could be the same).
  * @param $k string composed of the key and the iv separated by a point ('.')
