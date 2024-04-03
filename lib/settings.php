@@ -80,7 +80,7 @@ define('JIRAFEAU_SODIUM_CHUNKSIZE', 1024);
 // Define some Sodium constants from newer PHP versions if they are not available
 
 if (extension_loaded('sodium')) {
-    if (!defined('SSODIUM_CRYPTO_STREAM_XCHACHA20_KEYBYTES')) {
+    if (!defined('SODIUM_CRYPTO_STREAM_XCHACHA20_KEYBYTES')) {
         define('SODIUM_CRYPTO_STREAM_XCHACHA20_KEYBYTES', 32);
     }
 
