@@ -1216,7 +1216,7 @@ function jirafeau_crypt_create_iv($base, $size)
  * Crypt file using Sodium and returns decrypt key.
  * @param $fp_src file path to the file to crypt.
  * @param $fp_dst file path to the file to write crypted file (must not be the same).
- * @return decrypt key composed of the key and the iv separated by a point ('.')
+ * @return key used to encrypt the file
  */
 function jirafeau_encrypt_file($fp_src, $fp_dst)
 {
@@ -1256,8 +1256,8 @@ function jirafeau_encrypt_file($fp_src, $fp_dst)
  * Decrypt file using Sodium.
  * @param $fp_src file path to the file to decrypt.
  * @param $fp_dst file path to the file to write decrypted file (must not be the same).
- * @param $k string composed of the key and the iv separated by a point ('.')
- * @return key used to decrypt. a string of length 0 is returned if failed.
+ * @param $k decryption key
+ * @return true if decryption succeeded, false otherwise
  */
 function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
 {
@@ -1300,7 +1300,7 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
  * @param $fp_src file path to the file to decrypt.
  * @param $fp_dst file path to the file to write decrypted file (could be the same).
  * @param $k string composed of the key and the iv separated by a point ('.')
- * @return key used to decrypt. a string of length 0 is returned if failed.
+ * @return true if decryption succeeded, false otherwise
  */
 function jirafeau_decrypt_file_legacy($fp_src, $fp_dst, $k)
 {
