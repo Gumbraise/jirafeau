@@ -1,3 +1,9 @@
+# DISCLAMER
+
+The project is not maintained anymore. See [announcement](https://gitlab.com/mojo42/Jirafeau/-/issues/360).
+
+If you are forking the project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). I will add it here.
+
 # Jirafeau
 
 ![Build Status](https://img.shields.io/gitlab/pipeline/mojo42/Jirafeau/master.svg)
