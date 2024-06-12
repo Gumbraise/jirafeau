@@ -6,10 +6,8 @@ If you are forking the project, feel free to mention it in [comments](https://gi
 
 # Jirafeau
 
-![Build Status](https://img.shields.io/gitlab/pipeline/mojo42/Jirafeau/master.svg)
 ![Made With](https://img.shields.io/badge/made_with-php-blue.svg)
 ![License](https://img.shields.io/badge/license-agpl--3.0-blue.svg)
-![Contribution](https://img.shields.io/badge/contributions_welcome-brightgreen.svg?labelColor=brightgreen)
 
 Welcome to the official Jirafeau project, an [Open-Source software](https://en.wikipedia.org/wiki/Open-source_software).
 
