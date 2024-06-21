@@ -3,6 +3,7 @@
 The project is not maintained anymore. See [announcement](https://gitlab.com/mojo42/Jirafeau/-/issues/360).
 
 If you are forking the project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). I will add it here.
+- @Blackstareye [fork](https://gitlab.com/shared1270023/Jirafeau)
 
 # Jirafeau
 
