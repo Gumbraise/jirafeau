@@ -100,13 +100,15 @@ $cfg['upload_ip_nopassword'] = array();
  */
 $cfg['admin_password'] = '';
 
-/* If set, let the user be authenticated as administrator.
- * The user provided here is the user authenticated by HTTP authentication.
+/* If set, let the users be authenticated as administrator.
+ * The users provided here are authenticated by HTTP authentication.
  * Note that Jirafeau does not manage the HTTP login part, it just checks
- * that the provided user is logged in.
+ * that one of the provided users is logged in.
+ * May be an array for multiple users or a string for a single user.
+ * The option to provide a string is for backward compatibility.
  * If »admin_password« parameter is set, then the »admin_password« is ignored.
  */
-$cfg['admin_http_auth_user'] = '';
+$cfg['admin_http_auth_user'] = array();
 
 /* List of IP allowed to access the admin interface.
  * If the list is empty, then there is no admin interface restriction based on IP.

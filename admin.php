@@ -64,7 +64,8 @@ if (php_sapi_name() == "cli") {
     if (!jirafeau_admin_session_logged()) {
         /* Test HTTP authentication. */
         if (!empty($cfg['admin_http_auth_user']) &&
-          $cfg['admin_http_auth_user'] == $_SERVER['PHP_AUTH_USER']) {
+          ((is_array($cfg['admin_http_auth_user']) && in_array($_SERVER['PHP_AUTH_USER'], $cfg['admin_http_auth_user'])) ||
+          (($cfg['admin_http_auth_user'] == $_SERVER['PHP_AUTH_USER'])))) {
             jirafeau_admin_session_start();
         }
         /* Test web password authentication. */
