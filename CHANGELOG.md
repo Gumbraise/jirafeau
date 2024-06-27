@@ -10,6 +10,22 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
+# version 4.6.0 (not yet released)
+
+- New configuration options for allowing to require, check or generate file download passwords
+- Re-implemented server side encryption using PHP's `Sodium` extension (the formerly used `mcrypt` extension is deprecated)
+- Keep and show basic download stats
+- Removed Lighttpd's `mod_usertrack` from Docker config
+- Added `<meta name="viewport"…` to template header to support responsive themes
+- Removed usage of deprecated `strftime()` function
+- Few more little fixes
+- Typo and spelling mistakes
+
+New configuration items:
+- `download_password_requirement`, `download_password_gen_len`, `download_password_gen_chars`, `download_password_policy` and `download_password_policy_regex` for configuring file download passwords
+- `admin_ip` for limiting access to the admin interface to certain IP addresses
+- `admin_http_auth_user` is now an array (the possibility to use a string is preserved for backward compatibility)
+
 # version 4.5.0
 
 - Even more new translation, thanks a lot to all contributors!
@@ -26,7 +42,7 @@
 
 New configuration items:
 - `max_upload_chunk_size_bytes` option
-- `dark_tyle` option
+- `dark_style` option
 - Defaulting `file_hash` option from `md5` to `random`
 
 # version 4.4.0
