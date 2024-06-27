@@ -28,12 +28,12 @@ See [jirafeau.net](https://jirafeau.net/) for a demo.
 - Shows progression: speed, percentage and remaining upload time
 - Preview content in browser (if possible)
 - Optional password protection (for uploading or downloading)
-- option to require, check or generate file download passwords
+- Option to require, check or generate file download passwords
 - Set expiration time for downloads
 - Option to self-destruct after first download
 - Shortened URLs using base 64 encoding
 - Maximal upload size configurable
-- NO database, only use basic PHP
+- No database, only use basic PHP
 - Simple language support with a lot of langages (help us on [weblate](https://hosted.weblate.org/engage/jirafeau/)!)
 - File level [Deduplication](http://en.wikipedia.org/wiki/Data_deduplication) for storage optimization (does store duplicate files only once, but generate multiple links)
 - Optional data encryption
@@ -77,11 +77,11 @@ Installation steps:
 - Clone the [repository](https://gitlab.com/mojo42/Jirafeau/) or download the latest [release](https://gitlab.com/mojo42/Jirafeau/tags) from GitLab onto your webserver
 - Set owner & group according to your webserver
 - A) Setup with the installation wizard (web):
-  - Open your browser and go to your installed location, eg. ```https://example.com/jirafeau/```
+  - Open your browser and go to your installed location, eg. `https://example.com/jirafeau/`
   - The script will redirect to you to a minimal installation wizard to set up all required options
-  - All optional parameters may be set in ```lib/config.local.php```, take a look at ```lib/config.original.php``` to see all default values
+  - All optional parameters may be set in `lib/config.local.php`, take a look at `lib/config.original.php` to see all default values
 - B) Setup without the installation wizard (cli):
-  - Just copy ```lib/config.original.php``` to ```lib/config.local.php``` and customize it
+  - Just copy `lib/config.original.php` to `lib/config.local.php` and customize it
 
 💡 Hint: How to
 [install & configure Jirafeau](https://www.howtoforge.com/how-to-setup-a-file-sharing-website-with-jirafeau-on-debian-10/)
@@ -91,21 +91,21 @@ on Debian 10 from scratch, with Nginx and PHP-FPM.
 
 If you have some troubles, consider the following cases
 
-- Check your ```/lib/config.local.php``` file and compare it with ```/lib/config.original.php```, the configuration syntax or a parameter may have changed
+- Check your `/lib/config.local.php` file and compare it with `/lib/config.original.php`, the configuration syntax or a parameter may have changed
 - Check owner & permissions of your files
 - set `debug` option to `true` to check any warning or error
 
 ## Security
 
-```var``` directory contains all files and links. It is randomly named to limit access but you may add better protection to prevent un-authorized access to it.
+`var` directory contains all files and links. It is randomly named to limit access but you may add better protection to prevent un-authorized access to it.
 You have several options:
-- Configure a ```.htaccess```
+- Configure a `.htaccess`
 - Move var folder to a place on your server which can't be directly accessed
 - Disable automatic listing on your web server config or place a index.html in var's sub-directory (this is a limited solution)
 
-If you are using Apache, you can add the following line to your configuration to prevent people to access to your ```var``` folder:
+If you are using Apache, you can add the following line to your configuration to prevent people to access to your `var` folder:
 
-```RedirectMatch 301 ^/var-.* http://my.service.jirafeau ```
+`RedirectMatch 301 ^/var-.* http://my.service.jirafeau`
 
 If you are using nginx, you can add the following to your $vhost.conf:
 
@@ -116,7 +116,7 @@ location ~ /var-.* {
 }
 ```
 
-If you are using lighttpd, you can deny access to ```var``` folder in your configuration:
+If you are using lighttpd, you can deny access to `var` folder in your configuration:
 
 ```
 $HTTP["url"] =~ "^/var-*" {
@@ -130,7 +130,7 @@ An other obvious basic security is to let access users to the site by HTTPS (mak
 ## Server side encryption
 
 Data encryption can be activated in options. This feature makes the server encrypt data and send the decryt key to the user (inside download URL).
-The decrypt key is not stored on the server so if you loose an url, you won't be able to retrieve file content.
+The decrypt key is not stored on the server so if you lose the download URL, you won't be able to retrieve file content.
 Encryption is configured to use [XChaCha20-Poly1305](https://en.wikipedia.org/wiki/ChaCha20-Poly1305).
 In case of security troubles on the server, attacker won't be able to access files.
 
@@ -142,7 +142,7 @@ By activating this feature, you have to be aware of few things:
 -  Be sure your server do not log client's requests.
 -  Don't forget to enable https.
 
-In a next step, encryption will be made by the client (in javascript), see issue #10.
+In a next step, encryption will be made by the client (in JavaScript), see issue #10.
 
 ## License
 
@@ -189,11 +189,11 @@ There are two ways to limit upload access (but not download):
 - you can set one or more passwords in order to access the upload interface, or/and
 - you can configure a list of authorized IP ([CIDR notation](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing#CIDR_notation)) which are allowed to access to the upload page
 
-Check documentation of ```upload_password``` and ```upload_ip``` parameters in [lib/config.original.php](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/config.original.php).
+Check documentation of `upload_password` and `upload_ip` parameters in [lib/config.original.php](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/config.original.php).
 
 ### How can I automatize the cleaning of old (expired) files?
 
-You can call the admin.php script from the command line (CLI) with the ```clean_expired``` or ```clean_async``` commands: ```sudo -u www-data php admin.php clean_expired```.
+You can call the admin.php script from the command line (CLI) with the `clean_expired` or `clean_async` commands: `sudo -u www-data php admin.php clean_expired`.
 
 Then the command can be placed in a cron file to automatize the process. For example:
 ```
@@ -212,7 +212,7 @@ Anyway I would recommend you to use another web browser. :)
 
 You may change the default theme to any of the existing ones or a custom.
 
-Open your ```lib/config.local.php``` and change setting in the »`style`« key to the name of any folder in the ```/media``` directory.
+Open your `lib/config.local.php` and change setting in the »`style`« key to the name of any folder in the `/media` directory.
 
 Hint: To create a custom theme just copy the »courgette« folder and name your theme »custom« (this way it will be ignored by git and not overwritten during updates). You are invited to enhance the existing themes and send pull requests however.
 
@@ -229,28 +229,28 @@ If your browser supports HTML5 file API, you can send files as big as you want.
 For browsers who does not support HTML5 file API, the limitation come from PHP configuration.
 You have to set [post_max_size](https://php.net/manual/en/ini.core.php#ini.post-max-size) and [upload_max_filesize](https://php.net/manual/en/ini.core.php#ini.upload-max-filesize) in your php configuration. Note that Nginx setups may requiere to configure `client_max_body_size`.
 
-If you don't want to allow unlimited upload size, you can still setup a maximal file size in Jirafeau's setting (see ```maximal_upload_size``` in your configuration)
+If you don't want to allow unlimited upload size, you can still setup a maximal file size in Jirafeau's setting (see `maximal_upload_size` in your configuration)
 
 ### How can I edit an option?
 
 Documentation of all default options are located in [lib/config.original.php](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/config.original.php).
-If you want to change an option, just edit your ```lib/config.local.php```.
+If you want to change an option, just edit your `lib/config.local.php`.
 
 ### How can I change the Terms of Service?
 
 The license text on the "Terms of Service" page, which is shipped with the default installation, is based on the »[Open Source Initiative Terms of Service](https://opensource.org/ToS)«.
 
-To change this text simply copy the file [/lib/tos.original.txt](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/tos.original.txt), rename it to ```/lib/tos.local.txt``` and adapt it to your own needs.
+To change this text simply copy the file [/lib/tos.original.txt](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/tos.original.txt), rename it to `/lib/tos.local.txt` and adapt it to your own needs.
 
-If you update the installation, then only the ```tos.original.txt``` file may change eventually, not your ```tos.local.txt``` file.
+If you update the installation, then only the `tos.original.txt` file may change eventually, not your `tos.local.txt` file.
 
 ### How can I access the admin interface?
 
-Just go to ```/admin.php```.
+Just go to `/admin.php`.
 
 ### How can I use the scripting interface (API)?
 
-Simply go to ```/script.php``` with your web browser.
+Simply go to `/script.php` with your web browser.
 
 ### My downloads are incomplete or my uploads fails
 
