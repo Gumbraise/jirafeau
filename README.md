@@ -1,8 +1,11 @@
 # DISCLAMER
 
-The project is not maintained anymore. See [announcement](https://gitlab.com/mojo42/Jirafeau/-/issues/360).
+This project is a fork of the [discontinued project](https://gitlab.com/mojo42/Jirafeau/) by [Jérôme Jutteau](https://gitlab.com/mojo42/Jirafeau/).
 
-If you are forking the project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). I will add it here.
+If you are forking the original project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). Jérôme will add it there.
+
+Other forks:
+
 - @Blackstareye [fork](https://gitlab.com/shared1270023/Jirafeau)
 
 # Jirafeau
