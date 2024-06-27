@@ -75,5 +75,23 @@ define('JIRAFEAU_MONTH', 2592000); // JIRAFEAU_DAY * 30
 define('JIRAFEAU_QUARTER', 7776000); // JIRAFEAU_DAY * 90
 define('JIRAFEAU_YEAR', 31536000); // JIRAFEAU_DAY * 365
 
+define('JIRAFEAU_SODIUM_CHUNKSIZE', 1024);
+
+// Define some Sodium constants from newer PHP versions if they are not available
+
+if (extension_loaded('sodium')) {
+    if (!defined('SODIUM_CRYPTO_STREAM_XCHACHA20_KEYBYTES')) {
+        define('SODIUM_CRYPTO_STREAM_XCHACHA20_KEYBYTES', 32);
+    }
+
+    if (!defined('SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES')) {
+        define('SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES', 24);
+    }
+
+    if (!defined('SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES')) {
+        define('SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES', 17);
+    }
+}
+
 // set UTC as default timezone for all date/time functions
 date_default_timezone_set('UTC');

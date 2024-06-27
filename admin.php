@@ -44,7 +44,8 @@ if (php_sapi_name() == "cli") {
     } else {
         die("No command found. Should be admin.php <clean_expired|clean_async>.\n");
     }
-} else {
+// Second check: Challenge by IP
+} elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
     /* Disable admin interface if we have a empty admin password. */
     if (empty($cfg['admin_password']) && empty($cfg['admin_http_auth_user'])) {
         require(JIRAFEAU_ROOT . 'lib/template/header.php');
@@ -57,7 +58,7 @@ if (php_sapi_name() == "cli") {
 
     /* Logout if requested. */
     if (jirafeau_admin_session_logged() && isset($_POST['action']) && (strcmp($_POST['action'], 'logout') == 0)) {
-        jirafeau_admin_session_end();
+        jirafeau_session_end();
     }
 
     if (!jirafeau_admin_session_logged()) {
@@ -117,9 +118,13 @@ if (php_sapi_name() == "cli") {
     /* Show admin interface if not downloading a file. */
     if (!(isset($_POST['action']) && strcmp($_POST['action'], 'download') == 0)) {
         require(JIRAFEAU_ROOT . 'lib/template/header.php'); ?><h2><?php echo t('ADMIN_INTERFACE'); ?></h2><?php
-          ?><h2>(version <?php echo JIRAFEAU_VERSION ?>)</h2><?php
+        ?><h2>(version <?php echo JIRAFEAU_VERSION ?>)</h2><?php
 
-          ?><div id = "admin">
+        if ($cfg['enable_crypt'] && !(extension_loaded('sodium'))) {
+            echo '<div class="error"><p>'.t('SODIUM_UNAVAILABLE').'</p></div>';
+        }
+
+        ?><div id = "admin">
           <fieldset><legend><?php echo t('ACTIONS'); ?></legend>
           <table>
           <form method="post">
@@ -301,5 +306,8 @@ if (php_sapi_name() == "cli") {
     }
 
     require(JIRAFEAU_ROOT.'lib/template/footer.php');
+} else {
+    require(JIRAFEAU_ROOT . 'lib/template/header.php');
+    jirafeau_fatal_error(t('ACCESS_KO'), $cfg);
 }
 ?>

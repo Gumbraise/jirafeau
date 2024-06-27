@@ -1,4 +1,5 @@
 {
+    "SODIUM_UNAVAILABLE": "",
     "INSTALL_FILE_NOT_FOUND_TITLE": "Fichier d'installation non-trouvé",
     "INSTALL_FILE_NOT_FOUND_DESC": "L'installation est incomplète et le ficher install.php est introuvable",
     "2_W": "Deux semaines",

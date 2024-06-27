@@ -108,6 +108,14 @@ $cfg['admin_password'] = '';
  */
 $cfg['admin_http_auth_user'] = '';
 
+/* List of IP allowed to access the admin interface.
+ * If the list is empty, then there is no admin interface restriction based on IP.
+ * Elements of the list can be a single IP (e.g. "123.45.67.89") or
+ * an IP range (e.g. "123.45.0.0/16").
+ * Note that CIDR notation is available for IPv4 only for the moment.
+ */
+$cfg['admin_ip'] = array();
+
 /* Allow user to select different options for file expiration time.
  * Possible values in array:
  * 'minute': file is available for one minute
@@ -222,3 +230,29 @@ $cfg['debug'] = false;
  * Set to 0 to remove limitation.
  */
 $cfg['max_upload_chunk_size_bytes'] = 100000000; // 100MB
+
+/* Set password requirement policy for downloading files
+ * Possible values:
+ * optional (default): Password may be set by the uploader, but is not mandatory
+ * required: Setting a password is mandatory to upload a file.
+ * generated: Passwords are automatically generated and shown to the uploader, when uploading a file
+ */
+$cfg['download_password_requirement'] = 'optional';
+
+/* Set length of generated passwords
+ */
+$cfg['download_password_gen_len'] = 10;
+
+/* Set allowed chars for password generation
+ */
+$cfg['download_password_gen_chars'] = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*()_-=+;:,.?';
+/* Set password complexity policy for downloading files
+ * possible values:
+ * none (default): Passwords for downloading files can be of arbitrary complexity
+ * regex: Passwords are checked with a regex for complexity constraints
+ */
+$cfg['download_password_policy'] = 'none';
+/* Set the regex for regex download password policy
+ * Delimiters are need, but modifiers should not be used
+ */
+$cfg['download_password_policy_regex'] = '/.*/';

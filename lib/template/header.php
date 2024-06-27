@@ -7,6 +7,7 @@ header('x-ua-compatible: ie=edge');
 <head>
   <meta charset="utf-8">
   <title><?php echo (true === empty($cfg['title']))? t('JI_WEB_RE') : $cfg['title']; ?></title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link id="shortcut_icon" rel="shortcut icon" href="<?php echo 'media/' . $cfg['style'] . '/favicon.ico'; ?>">
   <link id="stylesheet" rel="stylesheet" href="<?php echo 'media/' . $cfg['style'] . '/style.css.php'; ?>" type="text/css" />
 </head>

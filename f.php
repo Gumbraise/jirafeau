@@ -248,25 +248,13 @@ if ($cfg['litespeed_workaround']) {
                $_SERVER['QUERY_STRING'] . '&litespeed_workaround=phase2');
     }
 }
-/* Read encrypted file. */
+/* Read encrypted file (Sodium mode). */
 elseif ($link['crypted']) {
-    /* Init module */
-    $m = mcrypt_module_open('rijndael-256', '', 'ofb', '');
-    /* Extract key and iv. */
-    $hash_key = md5($crypt_key);
-    $iv = jirafeau_crypt_create_iv($hash_key, mcrypt_enc_get_iv_size($m));
-    /* Init module. */
-    mcrypt_generic_init($m, $hash_key, $iv);
-    /* Decrypt file. */
-    $r = fopen(VAR_FILES . $p . $link['hash'], 'r');
-    while (!feof($r)) {
-        $dec = mdecrypt_generic($m, fread($r, 1024));
-        print $dec;
-    }
-    fclose($r);
-    /* Cleanup. */
-    mcrypt_generic_deinit($m);
-    mcrypt_module_close($m);
+    jirafeau_decrypt_file(VAR_FILES . $p . $link['hash'], 'php://output', $crypt_key);
+}
+/* Read encrypted file (legacy mode using mcrypt). */
+elseif ($link['crypted_legacy']) {
+    jirafeau_decrypt_file_legacy(VAR_FILES . $p . $link['hash'], 'php://output', $crypt_key);
 }
 /* Read file. */
 else {
@@ -285,6 +273,9 @@ else {
 if ($link['onetime'] == 'O') {
     jirafeau_delete_link($link_name);
 }
+
+jirafeau_write_download_stats($link_name, get_ip_address($cfg));
+
 exit;
 
 ?>

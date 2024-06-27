@@ -101,6 +101,19 @@ function jirafeau_gen_random($l)
     return $code;
 }
 
+function jirafeau_gen_download_pass($length, $allowed_chars)
+{
+    if ($length <= 0) {
+        return false;
+    }
+    $pass="";
+    for ($i = 0; $i < $length; $i++) {
+        $pass .= $allowed_chars[rand(0, strlen($allowed_chars) - 1)];
+    }
+
+    return $pass;
+}
+
 function is_ssl()
 {
     if (isset($_SERVER['HTTPS'])) {
@@ -130,8 +143,11 @@ function jirafeau_human_size($octets)
 // Convert UTC timestamp to a datetime field
 function jirafeau_get_datetimefield($timestamp)
 {
-    $content = '<span class="datetime" data-datetime="' . strftime('%Y-%m-%d %H:%M', $timestamp) . '">'
-        . strftime('%Y-%m-%d %H:%M', $timestamp) . ' (GMT)</span>';
+
+    $ts = date_create("@" . $timestamp);
+    $content = '<span class="datetime" data-datetime="' . date_format($ts, 'Y-m-d H:i') . '">'
+        . date_format($ts, 'Y-m-d H:i') . ' (GMT)</span>';
+    
     return $content;
 }
 
@@ -147,6 +163,9 @@ function jirafeau_clean_rm_link($link)
     $p = s2p("$link");
     if (file_exists(VAR_LINKS . $p . $link)) {
         unlink(VAR_LINKS . $p . $link);
+    }
+    if (file_exists(VAR_LINKS . $p . $link . '_download')) {
+        unlink(VAR_LINKS . $p . $link . '_download');
     }
     $parse = VAR_LINKS . $p;
     $scan = array();
@@ -190,23 +209,23 @@ function jirafeau_ini_to_bytes($value)
     $modifier = substr($value, -1);
     $bytes = substr($value, 0, -1);
     switch (strtoupper($modifier)) {
-    default:
-        return intval($value);
-        break;
-    case 'P':
-        $bytes *= 1024;
-        // no break
-    case 'T':
-        $bytes *= 1024;
-        // no break
-    case 'G':
-        $bytes *= 1024;
-        // no break
-    case 'M':
-        $bytes *= 1024;
-        // no break
-    case 'K':
-        $bytes *= 1024;
+        default:
+            return intval($value);
+            break;
+        case 'P':
+            $bytes *= 1024;
+            // no break
+        case 'T':
+            $bytes *= 1024;
+            // no break
+        case 'G':
+            $bytes *= 1024;
+            // no break
+        case 'M':
+            $bytes *= 1024;
+            // no break
+        case 'K':
+            $bytes *= 1024;
     }
     return $bytes;
 }
@@ -264,19 +283,19 @@ function jirafeau_get_max_upload_chunk_size_bytes($max_upload_chunk_size_bytes =
 function jirafeau_upload_errstr($code)
 {
     switch ($code) {
-    case UPLOAD_ERR_INI_SIZE:
-    case UPLOAD_ERR_FORM_SIZE:
-        return t('Your file exceeds the maximum authorized file size. ');
+        case UPLOAD_ERR_INI_SIZE:
+        case UPLOAD_ERR_FORM_SIZE:
+            return t('Your file exceeds the maximum authorized file size. ');
 
-    case UPLOAD_ERR_PARTIAL:
-    case UPLOAD_ERR_NO_FILE:
-        return
-            t('Your file was not uploaded correctly. You may succeed in retrying. ');
+        case UPLOAD_ERR_PARTIAL:
+        case UPLOAD_ERR_NO_FILE:
+            return
+                t('Your file was not uploaded correctly. You may succeed in retrying. ');
 
-    case UPLOAD_ERR_NO_TMP_DIR:
-    case UPLOAD_ERR_CANT_WRITE:
-    case UPLOAD_ERR_EXTENSION:
-        return t('Internal error. You may not succeed in retrying. ');
+        case UPLOAD_ERR_NO_TMP_DIR:
+        case UPLOAD_ERR_CANT_WRITE:
+        case UPLOAD_ERR_EXTENSION:
+            return t('Internal error. You may not succeed in retrying. ');
     }
     return t('Unknown error. ');
 }
@@ -435,13 +454,15 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
     /* Crypt file if option is enabled. */
     $crypted = false;
     $crypt_key = '';
-    if ($crypt == true && !(extension_loaded('mcrypt') == true)) {
-        error_log("PHP extension mcrypt not loaded, won't encrypt in Jirafeau");
+    if ($crypt == true && !(extension_loaded('sodium') == true)) {
+        error_log("PHP extension sodium not loaded, won't encrypt in Jirafeau");
     }
-    if ($crypt == true && extension_loaded('mcrypt') == true) {
-        $crypt_key = jirafeau_encrypt_file($file['tmp_name'], $file['tmp_name']);
+    if ($crypt == true && extension_loaded('sodium') == true) {
+        $crypt_key = jirafeau_encrypt_file($file['tmp_name'], $file['tmp_name'].'crypt');
         if (strlen($crypt_key) > 0) {
-            $crypted = true;
+            if (rename($file['tmp_name'].'crypt', $file['tmp_name']) === true) {
+                $crypted = true;
+            }
         }
     }
 
@@ -496,7 +517,7 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
         $handle,
         $name . NL. $mime_type . NL. $size . NL. $password . NL. $time .
             NL . $hash. NL . ($one_time_download ? 'O' : 'R') . NL . time() .
-            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C' : 'O')
+            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C2' : 'O')
     );
     fclose($handle);
     $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
@@ -645,7 +666,8 @@ function jirafeau_get_link($hash)
     $out['upload_date'] = trim($c[7]);
     $out['ip'] = trim($c[8]);
     $out['link_code'] = trim($c[9]);
-    $out['crypted'] = trim($c[10]) == 'C';
+    $out['crypted'] = trim($c[10]) == 'C2';
+    $out['crypted_legacy'] = trim($c[10]) == 'C';
 
     return $out;
 }
@@ -693,6 +715,7 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                 if (!count($l)) {
                     continue;
                 }
+                $ld = jirafeau_get_download_stats($node);
 
                 /* Filter. */
                 if (!empty($name) && !@preg_match("/$name/i", jirafeau_escape($l['file_name']))) {
@@ -716,6 +739,11 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                 echo t('UPLOAD_DATE') . ': ' . jirafeau_get_datetimefield($l['upload_date']) . '<br/>';
                 if (strlen($l['ip']) > 0) {
                     echo t('ORIGIN') . ': ' . $l['ip'] . '<br/>';
+                }
+                echo t('DOWNLOAD_COUNT') . ': ' . $ld['count'] . '<br/>';
+                if ($ld['count'] > 0) {
+                    echo t('DOWNLOAD_DATE') . ': ' . jirafeau_get_datetimefield($ld['date']) . '<br/>';
+                    echo t('DOWNLOAD_IP') . ': ' . $ld['ip'] . '<br/>';
                 }
                 echo '</td><td>';
                 echo '<form method="post">' .
@@ -875,6 +903,7 @@ function jirafeau_admin_bug_report($cfg)
 
     $out .= "# PHP options<br/>";
     $out .= "- php version: " . phpversion() . "<br/>";
+    $out .= "- sodium version: " . phpversion('sodium') . "<br/>";
     $out .= "- mcrypt version: " . phpversion('mcrypt') . "<br/>";
     $php_options =  [
         'post_max_size',
@@ -1116,10 +1145,12 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
 
     $crypted = false;
     $crypt_key = '';
-    if ($crypt == true && extension_loaded('mcrypt') == true) {
-        $crypt_key = jirafeau_encrypt_file($p, $p);
+    if ($crypt == true && extension_loaded('sodium') == true) {
+        $crypt_key = jirafeau_encrypt_file($p, $p.'.crypt');
         if (strlen($crypt_key) > 0) {
-            $crypted = true;
+            if (rename($p.'.crypt', $p) === true) {
+                $crypted = true;
+            }
         }
     }
 
@@ -1154,7 +1185,7 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
         $handle,
         $a['file_name'] . NL . $a['mime_type'] . NL . $size . NL .
             $a['key'] . NL . $a['time'] . NL . $hash . NL . $a['onetime'] . NL .
-            time() . NL . $a['ip'] . NL . $delete_link_code . NL . ($crypted ? 'C' : 'O')
+            time() . NL . $a['ip'] . NL . $delete_link_code . NL . ($crypted ? 'C2' : 'O')
     );
     fclose($handle);
     $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
@@ -1182,51 +1213,96 @@ function jirafeau_crypt_create_iv($base, $size)
 }
 
 /**
- * Crypt file and returns decrypt key.
+ * Crypt file using Sodium and returns decrypt key.
  * @param $fp_src file path to the file to crypt.
- * @param $fp_dst file path to the file to write crypted file (could be the same).
- * @return decrypt key composed of the key and the iv separated by a point ('.')
+ * @param $fp_dst file path to the file to write crypted file (must not be the same).
+ * @return key used to encrypt the file
  */
 function jirafeau_encrypt_file($fp_src, $fp_dst)
 {
     $fs = filesize($fp_src);
-    if ($fs === false || $fs == 0 || !(extension_loaded('mcrypt') == true)) {
+    if ($fs === false || $fs == 0 || extension_loaded('sodium') == false || $fp_src == $fp_dst) {
         return '';
     }
 
-    /* Prepare module. */
-    $m = mcrypt_module_open('rijndael-256', '', 'ofb', '');
     /* Generate key. */
-    $crypt_key = jirafeau_gen_random(10);
-    $hash_key = md5($crypt_key);
-    $iv = jirafeau_crypt_create_iv($hash_key, mcrypt_enc_get_iv_size($m));
+    $crypt_key = bin2hex(random_bytes(SODIUM_CRYPTO_STREAM_XCHACHA20_KEYBYTES / 2));
     /* Init module. */
-    mcrypt_generic_init($m, $hash_key, $iv);
+    [$crypt_state, $crypt_header] = sodium_crypto_secretstream_xchacha20poly1305_init_push($crypt_key);
     /* Crypt file. */
-    $r = fopen($fp_src, 'r');
-    $w = fopen($fp_dst, 'c');
-    while (!feof($r)) {
-        $enc = mcrypt_generic($m, fread($r, 1024));
+    $r = fopen($fp_src, 'rb');
+    $w = fopen($fp_dst, 'wb');
+    fwrite($w, $crypt_header);
+
+    for ($i = 0; $i < $fs; $i += JIRAFEAU_SODIUM_CHUNKSIZE) {
+        $to_enc = fread($r, JIRAFEAU_SODIUM_CHUNKSIZE);
+        $enc = sodium_crypto_secretstream_xchacha20poly1305_push($crypt_state, $to_enc);
+
         if (fwrite($w, $enc) === false) {
-            return '';
+           return '';
         }
     }
+
     fclose($r);
     fclose($w);
+
     /* Cleanup. */
-    mcrypt_generic_deinit($m);
-    mcrypt_module_close($m);
+    sodium_memzero($crypt_state);
+
     return $crypt_key;
 }
 
 /**
- * Decrypt file.
+ * Decrypt file using Sodium.
+ * @param $fp_src file path to the file to decrypt.
+ * @param $fp_dst file path to the file to write decrypted file (must not be the same).
+ * @param $k decryption key
+ * @return true if decryption succeeded, false otherwise
+ */
+function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
+{
+    $fs = filesize($fp_src);
+    if ($fs === false || $fs == 0 || extension_loaded('sodium') == false || $fp_src == $fp_dst) {
+        return false;
+    }
+
+    /* Decrypt file. */
+    $r = fopen($fp_src, 'rb');
+    $w = fopen($fp_dst, 'wb');
+
+    $crypt_header = fread($r, SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES);
+
+    /* Init module. */
+    $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
+
+    /* Decrypt file. */
+
+    for ($i = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES; $i < $fs; $i += JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES) {
+        $to_dec = fread($r, JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES);
+        [$dec, $crypt_tag] = sodium_crypto_secretstream_xchacha20poly1305_pull($crypt_state, $to_dec);
+        
+        if (fwrite($w, $dec) === false) {
+            return false;
+        }
+    }
+
+    fclose($r);
+    fclose($w);
+
+    /* Cleanup. */
+    sodium_memzero($crypt_state);
+
+    return true;
+}
+
+/**
+ * Decrypt file using mcrypt.
  * @param $fp_src file path to the file to decrypt.
  * @param $fp_dst file path to the file to write decrypted file (could be the same).
  * @param $k string composed of the key and the iv separated by a point ('.')
- * @return key used to decrypt. a string of length 0 is returned if failed.
+ * @return true if decryption succeeded, false otherwise
  */
-function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
+function jirafeau_decrypt_file_legacy($fp_src, $fp_dst, $k)
 {
     $fs = filesize($fp_src);
     if ($fs === false || $fs == 0 || extension_loaded('mcrypt') == false) {
@@ -1239,6 +1315,8 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
     $crypt_key = $k;
     $hash_key = md5($crypt_key);
     $iv = jirafeau_crypt_create_iv($hash_key, mcrypt_enc_get_iv_size($m));
+    /* Init module. */
+    mcrypt_generic_init($m, $hash_key, $iv);
     /* Decrypt file. */
     $r = fopen($fp_src, 'r');
     $w = fopen($fp_dst, 'c');
@@ -1355,6 +1433,31 @@ function jirafeau_challenge_upload($cfg, $ip, $password)
     return jirafeau_challenge_upload_ip_without_password($cfg, $ip) ||
             (!jirafeau_has_upload_password($cfg) && !jirafeau_upload_has_ip_restriction($cfg)) ||
             (jirafeau_challenge_upload_password($cfg, $password) && jirafeau_challenge_upload_ip($cfg, $ip));
+}
+
+/**
+ * Check if Jirafeau has a restriction on the IP address for accessing the admin interface.
+ * @return true if admin interface is IP restricted, false otherwise.
+ */
+function jirafeau_admin_has_ip_restriction($cfg)
+{
+    return count($cfg['admin_ip']) > 0;
+}
+
+/**
+ * Test if visitor's IP is authorized to access the admin interface.
+ *
+ * @param $cfg configuration
+ * @param $challengedIp IP to be challenged
+ * @return true if IP is authorized, false otherwise.
+ */
+function jirafeau_challenge_admin_ip($cfg, $challengedIp)
+{
+    // If no IP address have been listed, allow upload from any IP
+    if (!jirafeau_admin_has_ip_restriction($cfg)) {
+        return true;
+    }
+    return jirafeau_challenge_ip($cfg['admin_ip'], $challengedIp);
 }
 
 /** Tell if we have some HTTP headers generated by a proxy */
@@ -1476,7 +1579,7 @@ function jirafeau_admin_session_start()
     $_SESSION['admin_csrf'] = md5(uniqid(mt_rand(), true));
 }
 
-function jirafeau_admin_session_end()
+function jirafeau_session_end()
 {
     $_SESSION = array();
     session_destroy();
@@ -1494,6 +1597,17 @@ function jirafeau_admin_session_logged()
 function jirafeau_admin_csrf_field()
 {
     return "<input type='hidden' name='admin_csrf' value='". $_SESSION['admin_csrf'] . "'/>";
+}
+
+function jirafeau_user_session_start()
+{
+    $_SESSION['user_auth'] = true;
+}
+
+function jirafeau_user_session_logged()
+{
+    return isset($_SESSION['user_auth']) &&
+        $_SESSION['user_auth'] === true;
 }
 
 function jirafeau_dir_size($dir)
@@ -1574,5 +1688,35 @@ function jirafeau_add_ending_slash($path)
 
 function jirafeau_default_web_root()
 {
-    return $_SERVER['HTTP_HOST'] . str_replace('install.php', '', $_SERVER['REQUEST_URI']);
+    $url_scheme = (isset($_SERVER['HTTPS'])) ? 'https://' : 'http://';
+    return $url_scheme . $_SERVER['HTTP_HOST'] . str_replace('install.php', '', $_SERVER['REQUEST_URI']);
+}
+
+function jirafeau_get_download_stats($hash)
+{
+    $filename = VAR_LINKS . s2p("$hash") . $hash . '_download';
+
+    if (!file_exists($filename)) {
+        return array('count'=>0);
+    }
+
+    $c = file($filename);
+    $data['count'] = trim($c[0]);
+    $data['date'] = trim($c[1]);
+    $data['ip'] = trim($c[2]);
+
+    return $data;
+}
+
+function jirafeau_write_download_stats($hash, $ip)
+{
+    $data = jirafeau_get_download_stats($hash);
+    $count = $data['count'];
+    $count++;
+
+    $filename = VAR_LINKS . s2p("$hash") . $hash . '_download';
+
+    $handle = fopen($filename, 'w');
+    fwrite($handle, $count . NL . time() . NL . $ip);
+    fclose($handle);
 }

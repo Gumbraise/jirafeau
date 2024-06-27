@@ -34,6 +34,7 @@ More details about options in `lib/config.original.php`.
 
 Available options:
 - `ADMIN_PASSWORD`: setup a specific admin password. If not set, a random password will be generated.
+- `ADMIN_IP`: set one or more ip allowed to access admin interface (separated by comma).
 - `WEB_ROOT`: setup a specific domain to point at when generating links (e.g. 'jirafeau.mydomain.com/').
 - `VAR_ROOT`: setup a specific path where to place files. default: '/data'.
 - `FILE_HASH`: can be set to `md5`, `partial_md5` or `random` (default).
@@ -41,7 +42,8 @@ Available options:
 - `TITLE`: set Jirafeau instance title.
 - `ORGANISATION`: set organisation (in ToS).
 - `CONTACTPERSON`: set contact person (in ToS).
-- `STYLE`: apply a specific style.
+- `STYLE`: apply a specific style from the media folder.
+- `DARK_STYLE`: apply a specific style for browsers in dark mode.
 - `AVAILABILITY_DEFAULT`: setup which availability shows by default.
 - `ONE_TIME_DOWNLOAD`: set to 1 or 0 to enable or disable one time downloads.
 - `ENABLE_CRYPT`: set to 1 or 0 to enable or disable server side encryption.
@@ -52,6 +54,11 @@ Available options:
 - `UPLOAD_IP_NO_PASSWORD`: set one or more ip allowed to upload files without password (separated by comma).
 - `PROXY_IP`: set one or more proxy ip (separated by comma).
 - `STORE_UPLOADER_IP`: set to 1 or 0 to enable or disable keeping sender's IP with the _link_ file.
+- `DOWNLOAD_PASSWORD_REQUIREMENT`: set to 'optional' (default), 'required' or 'generated' to make a password for downloading optional, required or generated
+- `DOWNLOAD_PASSWORD_GEN_LEN`: set length of generated download passwords
+- `DOWNLOAD_PASSWORD_GEN_CHARS`: set characters used for generated download passwords
+- `DOWNLOAD_PASSWORD_POLICY`: set to 'regex' to use a regular expression to check user provided download passwords for complexity constraints
+- `DOWNLOAD_PASSWORD_POLICY_REGEX`: regex to check against if password policy is set to regex
 
 Example:
 ```
