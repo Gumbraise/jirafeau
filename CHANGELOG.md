@@ -4,7 +4,7 @@
 
 1. Backup your Jirafeau installation!
 2. Block access to Jirafeau
-3. Checkout the new version with Git using the [tagged release](https://gitlab.com/mojo42/Jirafeau/tags)
+3. Checkout the new version with Git using the [tagged release](https://gitlab.com/pcanterino/Jirafeau/tags)
    * If you have installed Jirafeau just by uploading files on your server, you can download the desired version, overwrite/remove all files and chown/chmod files if needed. Keep a backup of your local configuration file tough.
 4. With you browser, go to your Jirafeau root page
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically

@@ -13,7 +13,7 @@ The admin console is located on `/admin.php`, check console output to get auto-g
 # Build your own Jirafeau docker image
 
 ```
-git clone https://gitlab.com/mojo42/Jirafeau.git
+git clone https://gitlab.com/pcanterino/Jirafeau.git
 cd Jirafeau
 docker build -t your/jirafeau:latest .
 ```
