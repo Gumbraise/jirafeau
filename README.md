@@ -23,9 +23,9 @@ See [jirafeau.net](https://jirafeau.net/) for a demo.
 
 ## Main features
 
-- One upload → One download link & one delete link
-- Send any large files (thanks to the HTML5 file API → PHP post_max_size limit not relevant)
-- Shows progression: speed, percentage and remaining upload time
+- One upload → One download link and one delete link
+- Send any large files (thanks to the HTML5 file API → PHP `post_max_size` limit not relevant)
+- Shows upload progress: speed, percentage and remaining upload time
 - Preview content in browser (if possible)
 - Optional password protection (for uploading or downloading)
 - Option to require, check or generate file download passwords
@@ -34,12 +34,12 @@ See [jirafeau.net](https://jirafeau.net/) for a demo.
 - Shortened URLs using base 64 encoding
 - Maximal upload size configurable
 - No database, only use basic PHP
-- Simple language support with a lot of langages (help us on [weblate](https://hosted.weblate.org/engage/jirafeau/)!)
+- Simple language support with a lot of languages
 - File level [Deduplication](http://en.wikipedia.org/wiki/Data_deduplication) for storage optimization (does store duplicate files only once, but generate multiple links)
 - Optional data encryption
 - Small administration interface
 - CLI script to remove expired files automatically with a cronjob
-- Basic, adaptable »Terms Of Service« page
+- Basic, adaptable "Terms Of Service" page
 - Basic API
 - Bash script to upload files via command line
 - Themes
@@ -74,7 +74,7 @@ System requirements:
 - No database required, no mail required
 
 Installation steps:
-- Clone the [repository](https://gitlab.com/mojo42/Jirafeau/) or download the latest [release](https://gitlab.com/mojo42/Jirafeau/tags) from GitLab onto your webserver
+- Clone the [repository](https://gitlab.com/pcanterino/Jirafeau/) or download the latest [release](https://gitlab.com/pcanterino/Jirafeau/tags) from GitLab onto your webserver
 - Set owner & group according to your webserver
 - A) Setup with the installation wizard (web):
   - Open your browser and go to your installed location, eg. `https://example.com/jirafeau/`
@@ -129,18 +129,18 @@ An other obvious basic security is to let access users to the site by HTTPS (mak
 
 ## Server side encryption
 
-Data encryption can be activated in options. This feature makes the server encrypt data and send the decryt key to the user (inside download URL).
+Data encryption can be activated in options. This feature makes the server encrypt data and send the decrypt key to the user (inside download URL).
 The decrypt key is not stored on the server so if you lose the download URL, you won't be able to retrieve file content.
 Encryption is configured to use [XChaCha20-Poly1305](https://en.wikipedia.org/wiki/ChaCha20-Poly1305).
 In case of security troubles on the server, attacker won't be able to access files.
 
 By activating this feature, you have to be aware of few things:
--  Data encryption has a cost (cpu) and it takes more time for downloads to complete once file sent.
+-  Data encryption has a cost (CPU) and it takes more time for downloads to complete once file sent.
 -  During the download, the server will decrypt on the fly (and use resource).
 -  This feature needs to have the Sodium php module.
 -  File de-duplication will stop to work (as we can't compare two encrypted files).
--  Be sure your server do not log client's requests.
--  Don't forget to enable https.
+-  Be sure your server does not log client's requests.
+-  Don't forget to enable HTTPS.
 
 In a next step, encryption will be made by the client (in JavaScript), see issue #10.
 
@@ -161,27 +161,23 @@ PS: If you have fixed errors or added features, then please contribute to the pr
 
 If you want to contribute to project, then take a look at the git repository:
 
-- https://gitlab.com/mojo42/Jirafeau
+- https://gitlab.com/pcanterino/Jirafeau
 
 and the Contribution Guidelines
 
-- https://gitlab.com/mojo42/Jirafeau/blob/master/CONTRIBUTING.md
+- https://gitlab.com/pcanterino/Jirafeau/blob/master/CONTRIBUTING.md
 
 ## FAQ
 
 ### Can I add a new language in Jirafeau?
 
-Of course ! Translations are easy to make and no technical knowledge is required.
-
-Simply go to [Jirafeau's Weblate](https://hosted.weblate.org/engage/jirafeau/).
-
-If you want to add a new language in the list, feel free to contact us or leave a comment in ticket #9.
+Of course! The best way is to create a new JSON file under `lib/locales` and open a merge request.
 
 Thanks to all contributors ! :)
 
 ### How do I upgrade my Jirafeau?
 
-See change log and upgrade procedure in [CHANGELOG.md](https://gitlab.com/mojo42/Jirafeau/blob/master/CHANGELOG.md).
+See change log and upgrade procedure in [CHANGELOG.md](https://gitlab.com/pcanterino/Jirafeau/blob/master/CHANGELOG.md).
 
 ### How can I limit upload access?
 
@@ -189,7 +185,7 @@ There are two ways to limit upload access (but not download):
 - you can set one or more passwords in order to access the upload interface, or/and
 - you can configure a list of authorized IP ([CIDR notation](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing#CIDR_notation)) which are allowed to access to the upload page
 
-Check documentation of `upload_password` and `upload_ip` parameters in [lib/config.original.php](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/config.original.php).
+Check documentation of `upload_password` and `upload_ip` parameters in [lib/config.original.php](https://gitlab.com/pcanterino/Jirafeau/blob/master/lib/config.original.php).
 
 ### How can I automatize the cleaning of old (expired) files?
 
@@ -218,29 +214,29 @@ Hint: To create a custom theme just copy the »courgette« folder and name your 
 
 ### I found a bug, what should I do?
 
-Feel free to open a bug in the [GitLab's issues](https://gitlab.com/mojo42/Jirafeau/issues).
+Feel free to open a bug in the [GitLab's issues](https://gitlab.com/pcanterino/Jirafeau/issues).
 If you can, please copy-paste informations related to bug opening provided in admin interface.
 Admin interface can be reached by accessing `/admin.php`.
 
 ### How to set maximum file size?
 
-If your browser supports HTML5 file API, you can send files as big as you want.
+If your browser supports the HTML5 file API, you can send files as big as you want.
 
-For browsers who does not support HTML5 file API, the limitation come from PHP configuration.
+For browsers not supporting the HTML5 file API, the limitation comes from PHP configuration.
 You have to set [post_max_size](https://php.net/manual/en/ini.core.php#ini.post-max-size) and [upload_max_filesize](https://php.net/manual/en/ini.core.php#ini.upload-max-filesize) in your php configuration. Note that Nginx setups may requiere to configure `client_max_body_size`.
 
 If you don't want to allow unlimited upload size, you can still setup a maximal file size in Jirafeau's setting (see `maximal_upload_size` in your configuration)
 
 ### How can I edit an option?
 
-Documentation of all default options are located in [lib/config.original.php](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/config.original.php).
+Documentation of all default options are located in [lib/config.original.php](https://gitlab.com/pcanterino/Jirafeau/blob/master/lib/config.original.php).
 If you want to change an option, just edit your `lib/config.local.php`.
 
 ### How can I change the Terms of Service?
 
 The license text on the "Terms of Service" page, which is shipped with the default installation, is based on the »[Open Source Initiative Terms of Service](https://opensource.org/ToS)«.
 
-To change this text simply copy the file [/lib/tos.original.txt](https://gitlab.com/mojo42/Jirafeau/blob/master/lib/tos.original.txt), rename it to `/lib/tos.local.txt` and adapt it to your own needs.
+To change this text simply copy the file [/lib/tos.original.txt](https://gitlab.com/pcanterino/Jirafeau/blob/master/lib/tos.original.txt), rename it to `/lib/tos.local.txt` and adapt it to your own needs.
 
 If you update the installation, then only the `tos.original.txt` file may change eventually, not your `tos.local.txt` file.
 
@@ -278,19 +274,19 @@ The original project seems not to be continued anymore and I prefer to add more 
 
 ### What can we expect in the future?
 
-Check [issues](https://gitlab.com/mojo42/Jirafeau/issues) to check open bugs and incoming new stuff. :)
+Check [issues](https://gitlab.com/pcanterino/Jirafeau/issues) to check open bugs and incoming new stuff. :)
 
 ### What about this file deduplication thing?
 
 Jirafeau can use a very simple file level deduplication for storage optimization.
 
-This mean that if some people upload several times the same file, this will only store one time the file and increment a counter.
+This means that if some people upload the same file several times, the file will only be stored once and a counter will be incremented.
 
 If someone use his/her delete link or an admin cleans expired links, this will decrement the counter corresponding to the file.
 
 When the counter falls to zero, the file is destroyed.
 
-In order to know if a newly uploaded file already exist, Jirafeau will hash the file using md5 by default but other methods are available (see `file_hash` documentation in `lib/config.original.php`).
+In order to know if a newly uploaded file already exist, Jirafeau will hash the file using MD5 by default but other methods are available (see `file_hash` documentation in `lib/config.original.php`).
 
 This feature is disabled by default and can be enabled through the `file_hash` option.
 
@@ -303,10 +299,8 @@ So:
 
 ### How to contact someone from Jirafeau?
 
-Feel free to create an issue if you found a bug.
-
-Also, you can come have a chat on [libera.chat](https://web.libera.chat/) in `#jirafeau` channel.
+Feel free to create an [issue](https://gitlab.com/pcanterino/Jirafeau/-/issues) if you found a bug.
 
 ### Can I buy you a coffee?
 
-You can [drop few bucks](https://www.paypal.com/paypalme/jeromejutteau) to help the [demo web site](https://jirafeau.net) to stay alive.
+You can [drop few bucks for Jérôme Jutteau](https://www.paypal.com/paypalme/jeromejutteau) to help the [demo web site](https://jirafeau.net) to stay alive.
