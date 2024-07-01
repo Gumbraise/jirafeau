@@ -2,7 +2,9 @@
 
 This project is a fork of the [discontinued project](https://gitlab.com/mojo42/Jirafeau/) by [Jérôme Jutteau](https://gitlab.com/mojo42/Jirafeau/).
 
-If you are forking the original project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). Jérôme will add it there.
+If you've also forked the original project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). Jérôme will add it there.
+
+In this repository we are aiming to continue development of the original Jirafeau project. Feel free to contribute to this fork by participating in discussions and providing PRs, so we can build the best version of Jirafeau together!
 
 # Jirafeau
 
@@ -266,7 +268,7 @@ You may use Munin and simple scripts to collect the number of files in the Jiraf
 
 ### Why forking?
 
-The original project seems not to be continued anymore and I prefer to add more features and increase security from a stable version.
+In this repository we are aiming to continue development of the original Jirafeau project. We plan to add more features and increase security from a stable version.
 
 ### What can we expect in the future?
 

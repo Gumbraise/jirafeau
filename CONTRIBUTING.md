@@ -14,7 +14,7 @@ It is meant to be a simple filehosting service, simple to use, simple to install
 
 This project won't evolve to a file manager and will focus to keep a very few dependencies.
 
-So things like a markdown parser for the ToS or E-Mail tasks would be useful for sure, but may be [rejected](https://gitlab.com/jirafeau/Jirafeau/issues/37#note_1191566) since they would a lot of dependencies and makes the project more complex.
+So things like a markdown parser for the ToS or E-Mail tasks would be useful for sure, but were [rejected](https://gitlab.com/mojo42/Jirafeau/issues/37#note_1191566) long ago since they would add a lot of dependencies and makes the project more complex.
 
 ## Structure
 
