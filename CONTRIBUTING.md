@@ -14,7 +14,7 @@ It is meant to be a simple filehosting service, simple to use, simple to install
 
 This project won't evolve to a file manager and will focus to keep a very few dependencies.
 
-So things like a markdown parser for the ToS or E-Mail tasks would be useful for sure, but may be [rejected](https://gitlab.com/pcanterino/Jirafeau/issues/37#note_1191566) since they would a lot of dependencies and makes the project more complex.
+So things like a markdown parser for the ToS or E-Mail tasks would be useful for sure, but may be [rejected](https://gitlab.com/jirafeau/Jirafeau/issues/37#note_1191566) since they would a lot of dependencies and makes the project more complex.
 
 ## Structure
 
@@ -92,7 +92,7 @@ Quick walkthrough:
 
 * Fetch weblate and rebase and import translations
 * If the release is not done for security purposes: create a new issue and freeze next-release branch for at least week.
-* Compare the [»next-release« branch to »master«](https://gitlab.com/pcanterino/Jirafeau/compare/master...next-release)
+* Compare the [»next-release« branch to »master«](https://gitlab.com/jirafeau/Jirafeau/compare/master...next-release)
 * Add a list of noteworthy features and bugfixes to `CHANGELOG.md`
 * Add eventual upgrade procedure to `CHANGELOG.md`. Make sure to list all new configuration items.
 * Build and test docker image

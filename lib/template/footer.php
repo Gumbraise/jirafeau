@@ -3,7 +3,7 @@
         <!-- Project links -->
         <?php
           echo t('MADE_WITH') .
-            ' <a href="https://gitlab.com/pcanterino/Jirafeau" target="_blank" rel="noopener noreferrer">' . t('JI_PROJECT') . '</a>' .
+            ' <a href="https://gitlab.com/jirafeau/Jirafeau" target="_blank" rel="noopener noreferrer">' . t('JI_PROJECT') . '</a>' .
             ' (<a href="https://www.gnu.org/licenses/agpl.html" target="_blank" rel="noopener noreferrer"><abbr title="GNU Affero General Public License v3">AGPL-3.0</abbr></a>)';
         ?>
         <!-- Installation dependent links -->
