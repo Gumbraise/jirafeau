@@ -63,9 +63,9 @@ Translation may be added via [Jirafeau's Weblate](https://hosted.weblate.org/pro
 
 ## Branches
 
-* ```master``` = latest release, e.g. 2.0.1
-* ```next-release``` = development branch - all new features are merged into this branch until the next version is released. So use this branch as base while developing new features or bugfixes.
-* ```test``` = sandbox branch to test new features or merge requests, or run integration tests. The content of this branch may change at any time.
+* `master` = latest release, e.g. 2.0.1
+* `next-release` = development branch - all new features are merged into this branch until the next version is released. So use this branch as base while developing new features or bugfixes.
+* `test` = sandbox branch to test new features or merge requests, or run integration tests. The content of this branch may change at any time.
 
 ## Merge Requests
 
@@ -73,32 +73,32 @@ Please create one branch for each feature and send one merge request for each br
 
 Don't squash several changes or commits into one merge request as this is hard to review.
 
-Please use ```next-release``` as base branch and send your merge request to this branch (not ```master```).
+Please use `next-release` as base branch and send your merge request to this branch (not `master`).
 
 Quick walkthrough:
 
 * Create ticket for new feature
 * Fork the original repository, clone the own repository, add the original repository as upstream
-* Checkout »next-release« branch ```git checkout next-release```
-* Create a new branch on top of that one, e.g. »some-feature« ```git checkout -b some-feature```
+* Checkout `next-release` branch `git checkout next-release`
+* Create a new branch on top of that one, e.g. `some-feature`: `git checkout -b some-feature`
 * Make your change
 * You may check if the project is still [REUSE Compliant](https://reuse.software/) by running `docker run -v $(pwd):/code --rm fsfe/reuse /bin/sh -c "cd /code && reuse lint"`
-* Commit changes → push → send merge request ```git add -A; git commit; git push``` MR via GitLab (link shown in console)
+* Commit changes → push → send merge request `git add -A; git commit; git push` MR via GitLab (link shown in console)
 * Feature is reviewed
-  * MR accepted: Reviewer checks out »next-release« branch and cherry-picks the commit ```git checkout next-release; git cherry-pick be4369641; git push```
-  * MR declined: Reviewer add some notes, Developer rebases his branch, adds neccessary changes, force pushes the branch, ask a reviewer to review the changes in the merge request ticket (as Gitlab recognizes them automatically) ```git checkout some-feature; git rebase upstream/next-release``` …[add changes]… ```git add -A, git commit --amend; git push -f```
+  * MR accepted: Reviewer checks out `next-release` branch and cherry-picks the commit `git checkout next-release; git cherry-pick be4369641; git push`
+  * MR declined: Reviewer add some notes, Developer rebases his branch, adds neccessary changes, force pushes the branch, ask a reviewer to review the changes in the merge request ticket (as Gitlab recognizes them automatically) `git checkout some-feature; git rebase upstream/next-release` …[add changes]… `git add -A, git commit --amend; git push -f`
 
 ## New Releases
 
 * Fetch weblate and rebase and import translations
 * If the release is not done for security purposes: create a new issue and freeze next-release branch for at least week.
-* Compare the [»next-release« branch to »master«](https://gitlab.com/jirafeau/Jirafeau/compare/master...next-release)
+* Compare the [`next-release` branch to `master`](https://gitlab.com/jirafeau/Jirafeau/compare/master...next-release)
 * Add a list of noteworthy features and bugfixes to `CHANGELOG.md`
 * Add eventual upgrade procedure to `CHANGELOG.md`. Make sure to list all new configuration items.
 * Build and test docker image
-* Change the version, using [semantic versioning](http://semver.org/), in ```settings.php```
-* Merge »next-release« branch to »master«
-* Tag the »master« with the new version
+* Change the version, using [semantic versioning](http://semver.org/), in `settings.php`
+* Merge `next-release` branch to `master`
+* Tag the `master` with the new version
 * Push branch and tag
 * Push new docker image
 * Update the demo page

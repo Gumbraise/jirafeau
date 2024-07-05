@@ -1,10 +1,10 @@
 # DISCLAMER
 
-This project is a fork of the [discontinued project](https://gitlab.com/mojo42/Jirafeau/) by [Jérôme Jutteau](https://gitlab.com/mojo42/Jirafeau/).
+This project is a fork of the [discontinued project](https://gitlab.com/mojo42/Jirafeau/) by [Jérôme Jutteau](https://gitlab.com/mojo42/).
 
 If you've also forked the original project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). Jérôme will add it there.
 
-In this repository we are aiming to continue development of the original Jirafeau project. Feel free to contribute to this fork by participating in discussions and providing PRs, so we can build the best version of Jirafeau together!
+In this repository we are aiming to continue development of the original Jirafeau project. Feel free to contribute to this fork by participating in discussions and providing merge requests, so we can build the best version of Jirafeau together!
 
 # Jirafeau
 
@@ -21,7 +21,7 @@ See [jirafeau.net](https://jirafeau.net/) for a demo.
 
 ## Main features
 
-- One upload → One download link and one delete link
+- One upload → one download link and one delete link
 - Send any large files (thanks to the HTML5 file API → PHP `post_max_size` limit not relevant)
 - Shows upload progress: speed, percentage and remaining upload time
 - Preview content in browser (if possible)
@@ -29,11 +29,11 @@ See [jirafeau.net](https://jirafeau.net/) for a demo.
 - Option to require, check or generate file download passwords
 - Set expiration time for downloads
 - Option to self-destruct after first download
-- Shortened URLs using base 64 encoding
+- Shortened URLs using Base64 encoding
 - Maximal upload size configurable
 - No database, only use basic PHP
 - Simple language support with a lot of languages
-- File level [Deduplication](http://en.wikipedia.org/wiki/Data_deduplication) for storage optimization (does store duplicate files only once, but generate multiple links)
+- File level [deduplication](http://en.wikipedia.org/wiki/Data_deduplication) for storage optimization (does store duplicate files only once, but generate multiple links)
 - Optional data encryption
 - Small administration interface
 - CLI script to remove expired files automatically with a cronjob
@@ -42,7 +42,7 @@ See [jirafeau.net](https://jirafeau.net/) for a demo.
 - Bash script to upload files via command line
 - Themes
 
-Jirafeau is a fork of the original project [Jyraphe](http://home.gna.org/jyraphe/) based on the 0.5 (stable version) with a **lot** of modifications.
+Jirafeau is a fork of the original project [Jyraphe](https://web.archive.org/web/20170506133242/home.gna.org/jyraphe) based on the 0.5 (stable version) with a **lot** of modifications.
 
 As it's original project, Jirafeau is made in the [KISS](http://en.wikipedia.org/wiki/KISS_principle) way (Keep It Simple, Stupid).
 
@@ -67,7 +67,7 @@ also use a [docker image](https://hub.docker.com/r/mojo42/jirafeau/) or build
 it yourself. Check [docker folder](docker/README.md) for more informations.
 
 System requirements:
-- PHP >= 5.6
+- PHP >= 7.4
 - Optional, but recommended: Git >= 2.7
 - No database required, no mail required
 
@@ -83,14 +83,14 @@ Installation steps:
 
 💡 Hint: How to
 [install & configure Jirafeau](https://www.howtoforge.com/how-to-setup-a-file-sharing-website-with-jirafeau-on-debian-10/)
-on Debian 10 from scratch, with Nginx and PHP-FPM.
+on Debian 10 from scratch, with nginx and PHP-FPM.
 
 ### Troubleshooting
 
 If you have some troubles, consider the following cases
 
 - Check your `/lib/config.local.php` file and compare it with `/lib/config.original.php`, the configuration syntax or a parameter may have changed
-- Check owner & permissions of your files
+- Check owner and permissions of your files
 - set `debug` option to `true` to check any warning or error
 
 ## Security
@@ -140,7 +140,7 @@ By activating this feature, you have to be aware of few things:
 -  Be sure your server does not log client's requests.
 -  Don't forget to enable HTTPS.
 
-In a next step, encryption will be made by the client (in JavaScript), see issue #10.
+In a next step, encryption will be made by the client (in JavaScript).
 
 ## License
 
@@ -206,9 +206,9 @@ Anyway I would recommend you to use another web browser. :)
 
 You may change the default theme to any of the existing ones or a custom.
 
-Open your `lib/config.local.php` and change setting in the »`style`« key to the name of any folder in the `/media` directory.
+Open your `lib/config.local.php` and change setting in the `style` key to the name of any folder in the `/media` directory.
 
-Hint: To create a custom theme just copy the »courgette« folder and name your theme »custom« (this way it will be ignored by git and not overwritten during updates). You are invited to enhance the existing themes and send pull requests however.
+Hint: To create a custom theme just copy the `courgette` folder and name your theme `custom` (this way it will be ignored by git and not overwritten during updates). You are invited to enhance the existing themes and send pull requests however.
 
 ### I found a bug, what should I do?
 
@@ -221,7 +221,7 @@ Admin interface can be reached by accessing `/admin.php`.
 If your browser supports the HTML5 file API, you can send files as big as you want.
 
 For browsers not supporting the HTML5 file API, the limitation comes from PHP configuration.
-You have to set [post_max_size](https://php.net/manual/en/ini.core.php#ini.post-max-size) and [upload_max_filesize](https://php.net/manual/en/ini.core.php#ini.upload-max-filesize) in your php configuration. Note that Nginx setups may requiere to configure `client_max_body_size`.
+You have to set [post_max_size](https://php.net/manual/en/ini.core.php#ini.post-max-size) and [upload_max_filesize](https://php.net/manual/en/ini.core.php#ini.upload-max-filesize) in your php configuration. Note that nginx setups may requiere to configure `client_max_body_size`.
 
 If you don't want to allow unlimited upload size, you can still setup a maximal file size in Jirafeau's setting (see `maximal_upload_size` in your configuration)
 
@@ -232,7 +232,7 @@ If you want to change an option, just edit your `lib/config.local.php`.
 
 ### How can I change the Terms of Service?
 
-The license text on the "Terms of Service" page, which is shipped with the default installation, is based on the »[Open Source Initiative Terms of Service](https://opensource.org/ToS)«.
+The license text on the "Terms of Service" page, which is shipped with the default installation, is based on the "[Open Source Initiative Terms of Service](https://opensource.org/ToS)".
 
 To change this text simply copy the file [/lib/tos.original.txt](https://gitlab.com/jirafeau/Jirafeau/blob/master/lib/tos.original.txt), rename it to `/lib/tos.local.txt` and adapt it to your own needs.
 
@@ -250,7 +250,7 @@ Simply go to `/script.php` with your web browser.
 
 Be sure your PHP installation is not using safe mode, it may cause timeouts.
 
-If you're using nginx, you might need to increase `client_max_body_size` or remove the restriction altogether. In your nginx.conf:
+If you're using nginx, you might need to increase `client_max_body_size` or remove the restriction altogether. In your `nginx.conf`:
 
 ```nginx
 http {
@@ -301,4 +301,4 @@ Feel free to create an [issue](https://gitlab.com/jirafeau/Jirafeau/-/issues) if
 
 ### Can I buy you a coffee?
 
-You can [drop few bucks for Jérôme Jutteau](https://www.paypal.com/paypalme/jeromejutteau) to help the [demo web site](https://jirafeau.net) to stay alive.
+You can [drop few bucks for Jérôme Jutteau](https://www.paypal.com/paypalme/jeromejutteau).
