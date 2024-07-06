@@ -1,4 +1,6 @@
-# Note about upgrading
+# Jirafeau's change log
+
+## Note about upgrading
 
 "in-place upgrade" refers to this general procedure:
 
@@ -10,7 +12,7 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
-# version 4.6.0 (not yet released)
+## Version 4.6.0 (not yet released)
 
 - New configuration options for allowing to require, check or generate file download passwords
 - Re-implemented server side encryption using PHP's `Sodium` extension (the formerly used `mcrypt` extension is deprecated)
@@ -26,7 +28,7 @@ New configuration items:
 - `admin_ip` for limiting access to the admin interface to certain IP addresses
 - `admin_http_auth_user` is now an array (the possibility to use a string is preserved for backward compatibility)
 
-# version 4.5.0
+## Version 4.5.0
 
 - Even more new translation, thanks a lot to all contributors!
 - Support for automatic dark theme
@@ -45,7 +47,7 @@ New configuration items:
 - `dark_style` option
 - Defaulting `file_hash` option from `md5` to `random`
 
-# version 4.4.0
+## Version 4.4.0
 
 - Add docker options
 - Admin pannel can output informations for bug opening
@@ -60,7 +62,7 @@ New configuration items:
 New configuration items:
 - `fortnight` value in `availabilities` array (default to `true`)
 
-# version 4.3.0
+## Version 4.3.0
 
 - Fix various docker errors
 - Fix various upload errors
@@ -72,7 +74,7 @@ New configuration items:
 New configuration items:
 - `store_uploader_ip` (default to `true`)
 
-# version 4.2.0
+## Version 4.2.0
 
 - New file_hash option to eventually speed-up file identification process
 - one_time_download is now optional
@@ -86,12 +88,12 @@ New configuration items:
 - Romanian lang support and other various lang support
 - Upgrade from 4.1.1: in-place upgrade
 
-# Version 4.1.1
+## Version 4.1.1
 
 - Fix lang sanity check
 - Upgrade from 4.1.0: in-place upgrade
 
-# Version 4.1.0
+## Version 4.1.0
 
 - Fix upload password and allowed ip (#201)
 - Code refactorisation of IP checking
@@ -101,7 +103,7 @@ New configuration items:
 - More languages supported and language fixes
 - Upgrade from 4.0.0: in-place upgrade
 
-# Version 4.0.0
+## Version 4.0.0
 
 - Removed plain-text password support for admin auth (breaking change).
 - Default folder sub-division to 8 characters (breaking change).
@@ -110,7 +112,7 @@ New configuration items:
 - Other minor bug fixes
 - More languages supported
 
-## Upgrade from 3.4.1 to 4.0.0
+### Upgrade from 3.4.1 to 4.0.0
 
 You may have to change your administrator password in your config file as admin password are only stored using sha256 (SHA2).
 To do so, edit `lib/config.local.php` and update `admin_password` option using `echo -n MyNewPassw0rd | sha256sum` command.
@@ -129,7 +131,7 @@ find files -type f ! -name "*_count" | while read f; do bn="$(basename "$f")"; d
 find links -type f | while read link; do bn="$(basename "$link")"; mkdir "links/$bn"; mv "$link" "links/$bn/"; done; find links -maxdepth 1 -type d -iname "?" -exec rm -rf {} \;
 ```
 
-# Version 3.4.1
+## Version 3.4.1
 
 - Security fixes, thanks [Bishopfox Team](https://www.bishopfox.com/)
 - Translation fixes
@@ -138,7 +140,7 @@ find links -type f | while read link; do bn="$(basename "$link")"; mkdir "links/
 - other minor fixes
 - Upgrade from 3.4.0: in-place upgrade
 
-# Version 3.4.0
+## Version 3.4.0
 
 - Add encryption support in bash script
 - Refactoring of lang system for simpler management
@@ -147,7 +149,7 @@ find links -type f | while read link; do bn="$(basename "$link")"; mkdir "links/
 - Fixed some spelling issues
 - Upgrade from 3.3.0 : in-place upgrade
 
-# Version 3.3.0
+## Version 3.3.0
 
 - Added Docker Support
 - Added a copy button next to links to copy URLs in clipboard
@@ -159,25 +161,25 @@ find links -type f | while read link; do bn="$(basename "$link")"; mkdir "links/
 - Removed useless alias API support (some old toy)
 - Upgrade from 3.2.1 : in-place upgrade
 
-# Version 3.2.1
+## Version 3.2.1
 
 - fix download view after an upload
 - Upgrade from 3.2.0 : in-place upgrade
 
-# Version 3.2.0
+## Version 3.2.0
 
 - Update translations from Update translations from weblate
 - Better style
 - Fix regression on admin password setting
 - Upgrade from 3.1.0 : in-place upgrade
 
-# Version 3.1.0
+## Version 3.1.0
 
 - Fix regression on user authentication (see #113)
 - Some cosmetic change
 - Upgrade from 3.0.0 : in-place upgrade
 
-# Version 3.0.0
+## Version 3.0.0
 
 - Remove XHTML doctype, support HTML5 only → breaking change for older browsers
 - Remove redundant code
@@ -192,7 +194,7 @@ find links -type f | while read link; do bn="$(basename "$link")"; mkdir "links/
 - Fix UI glitches in admin panel and upload form
 - Upgrade from 2.0.0 : in-place upgrade
 
-# Version 2.0.0
+## Version 2.0.0
 
 - Various documentation improvements
 - Simplify automatic generation of local configuration file
@@ -200,12 +202,12 @@ find links -type f | while read link; do bn="$(basename "$link")"; mkdir "links/
 - Bash Script: Enhanced help, show version, return link to web view as well
 - »Terms of Service« refactored - Enable admin to overwrite the ToS, without changing existing source code → breaking, see upgrade notes
 
-## Upgrade from version 1.2.0 to 2.0.0
+### Upgrade from version 1.2.0 to 2.0.0
 
 The "Terms of Service" text file changed.
 To reuse a custom version of your ToS, move your ```/tos_text.php``` file to ```/lib/tos.local.txt``` and remove all HTML und PHP Tags, leaving a regular text file.
 
-# Version 1.2.0
+## Version 1.2.0
 
 - Link on API page to generate bash script
 - More informative error codes for API
@@ -221,7 +223,7 @@ To reuse a custom version of your ToS, move your ```/tos_text.php``` file to ```
 - Code cleanups
 - Upgrade from 1.1: in-place upgrade
 
-# Version 1.1
+## Version 1.1
 
 - New skins
 - Add optional server side encryption
@@ -237,7 +239,7 @@ To reuse a custom version of your ToS, move your ```/tos_text.php``` file to ```
 - Preview URL
 - Get Jirafeau's version in admin interface
 
-### From version 1.0 to 1.1
+### Upgrade from version 1.0 to 1.1
 
 - Download URL changed. Add a rewrite rule in your web server configuration to rename ```file.php``` to ```f.php``` to make older, still existing links work again-
 - The default theme changed. Optionally change the theme in ```lib/config.local.php``` to "courgette"
