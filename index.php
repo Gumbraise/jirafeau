@@ -50,6 +50,7 @@ if (jirafeau_user_session_logged()) {
 // Second check: Challenge by IP NO PASSWORD
 elseif (true === jirafeau_challenge_upload_ip_without_password($cfg, get_ip_address($cfg))) {
     jirafeau_user_session_start();
+    $_SESSION['user_auth_type'] = JIRAFEAU_USER_AUTH_BY_IP_NO_PASSWORD;
 }
 // Third check: Challenge by IP
 elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
@@ -59,6 +60,7 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
         if (isset($_POST['upload_password'])) {
             if (jirafeau_challenge_upload_password($cfg, $_POST['upload_password'])) {
                 jirafeau_user_session_start();
+                $_SESSION['user_auth_type'] = JIRAFEAU_USER_AUTH_BY_PASSWORD;
             } else {
                 jirafeau_session_end();
                 jirafeau_fatal_error(t('BAD_PSW'), $cfg);
@@ -290,7 +292,7 @@ if ($cfg['maximal_upload_size'] >= 1024) {
     </div> </fieldset></form>
 
     <?php
-    if (jirafeau_user_session_logged()) {
+    if (jirafeau_user_session_logged() && $_SESSION['user_auth_type'] == JIRAFEAU_USER_AUTH_BY_PASSWORD) {
         ?>
     <form method="post" class="form logout">
         <input type = "hidden" name = "action" value = "logout"/>

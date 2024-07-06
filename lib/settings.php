@@ -75,6 +75,9 @@ define('JIRAFEAU_MONTH', 2592000); // JIRAFEAU_DAY * 30
 define('JIRAFEAU_QUARTER', 7776000); // JIRAFEAU_DAY * 90
 define('JIRAFEAU_YEAR', 31536000); // JIRAFEAU_DAY * 365
 
+define('JIRAFEAU_USER_AUTH_BY_IP_NO_PASSWORD', 1);
+define('JIRAFEAU_USER_AUTH_BY_PASSWORD', 2);
+
 define('JIRAFEAU_SODIUM_CHUNKSIZE', 1024);
 
 // Define some Sodium constants from newer PHP versions if they are not available
