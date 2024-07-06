@@ -135,7 +135,7 @@ In case of security troubles on the server, attacker won't be able to access fil
 By activating this feature, you have to be aware of few things:
 -  Data encryption has a cost (CPU) and it takes more time for downloads to complete once file sent.
 -  During the download, the server will decrypt on the fly (and use resource).
--  This feature needs to have the Sodium php module.
+-  This feature needs to have the [`Sodium`](https://www.php.net/manual/en/book.sodium.php) PHP module.
 -  File de-duplication will stop to work (as we can't compare two encrypted files).
 -  Be sure your server does not log client's requests.
 -  Don't forget to enable HTTPS.
