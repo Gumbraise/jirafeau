@@ -1,11 +1,3 @@
-# DISCLAMER
-
-This project is a fork of the [discontinued project](https://gitlab.com/mojo42/Jirafeau/) by [Jérôme Jutteau](https://gitlab.com/mojo42/).
-
-If you've also forked the original project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). Jérôme will add it there.
-
-In this repository we are aiming to continue development of the original Jirafeau project. Feel free to contribute to this fork by participating in discussions and providing merge requests, so we can build the best version of Jirafeau together!
-
 # Jirafeau
 
 ![Made With](https://img.shields.io/badge/made_with-php-blue.svg)
@@ -18,6 +10,14 @@ Jirafeau is a "one-click-filesharing": Select your file, upload, share a link. T
 See [jirafeau.net](https://jirafeau.net/) for a demo.
 
 ![Screenshot1](http://i.imgur.com/TPjh48P.png)
+
+## DISCLAMER
+
+This project is a fork of the [discontinued project](https://gitlab.com/mojo42/Jirafeau/) by [Jérôme Jutteau](https://gitlab.com/mojo42/).
+
+If you've also forked the original project, feel free to mention it in [comments](https://gitlab.com/mojo42/Jirafeau/-/issues/360). Jérôme will add it there.
+
+In this repository we are aiming to continue development of the original Jirafeau project. Feel free to contribute to this fork by participating in discussions and providing merge requests, so we can build the best version of Jirafeau together!
 
 ## Main features
 
