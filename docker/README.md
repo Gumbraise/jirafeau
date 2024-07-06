@@ -1,4 +1,8 @@
-# Run Jirafeau through a pre-made Docker image
+# Jirafeau's Docker image
+
+## Run Jirafeau through a pre-made Docker image
+
+**There are currently no official pre-made Docker images of Jirafeau! The repository mentioned in this section is outdated!**
 
 Jirafeau is a small PHP application so running it inside a docker container is pretty straightforward.
 
@@ -10,7 +14,7 @@ docker run -it --rm -p 8080:80 mojo42/jirafeau:latest
 Then connect on [localhost:8080](http://localhost:8080/).
 The admin console is located on `/admin.php`, check console output to get auto-generated admin password.
 
-# Build your own Jirafeau docker image
+## Build your own Jirafeau docker image
 
 ```
 git clone https://gitlab.com/jirafeau/Jirafeau.git
@@ -18,7 +22,7 @@ cd Jirafeau
 docker build -t your/jirafeau:latest .
 ```
 
-# Security
+## Security
 
 You may be interested in running Jirafeau on port 80:
 ```
@@ -27,7 +31,7 @@ docker run -d -p 80:80 --sysctl net.ipv4.ip_unprivileged_port_start=80 mojo42/ji
 
 Note that Jirafeau image does not provide any SSL/TLS. You may be interested in using [docker compose](https://docs.docker.com/compose/) combined with [Let's Encrypt](https://letsencrypt.org/).
 
-# Options
+## Options
 
 Jirafeau's docker image accepts some options through environment variables to ease its configuration.
 More details about options in `lib/config.original.php`.
@@ -65,9 +69,9 @@ Example:
 docker run -it -p 8080:80 --rm -e ADMIN_PASSWORD='p4ssw0rd' -e WEB_ROOT='jirafeau.mydomain.com/' -e UPLOAD_PASSWORD='foo,bar' -e PREVIEW=0  mojo42/jirafeau:latest
 ```
 
-# Data Storage
+## Data storage
 
-Files and links are stored in `/data` by default. Sub folders are automatically created with needed permissions at creation if needed.
+Files and links are stored in `/data` by default. Subfolders are automatically created with needed permissions at creation if needed.
 Note that configuration is not stored in /data.
 
 Example of using a dedicated volume to store Jirafeau data separately from the container:
