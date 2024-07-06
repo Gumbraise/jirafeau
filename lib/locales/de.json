@@ -1,7 +1,7 @@
 {
     "SODIUM_UNAVAILABLE": "Verschlüsselung ist in der Konfiguration aktiviert, aber das PHP-Modul \"Sodium\" ist nicht verfügbar! Verschlüsselung ist nicht verfügbar!",
-    "INSTALL_FILE_NOT_FOUND_TITLE": "",
-    "INSTALL_FILE_NOT_FOUND_DESC": "",
+    "INSTALL_FILE_NOT_FOUND_TITLE": "Installationsprogramm nicht gefunden",
+    "INSTALL_FILE_NOT_FOUND_DESC": "Installation wurde nicht erfolgreich abgeschlossen und install.php scheint nicht zu existieren",
     "2_W": "Zwei Wochen",
     "REPORTING_AN_ISSUE": "Einen Fehler melden",
     "SIZE_DATA": "Datengröße",
@@ -41,7 +41,7 @@
     "HERE_SOLUTION": "Hier ist eine Lösung",
     "INFO": "Information",
     "JI_INSTALL": "Installation von Jirafeau",
-    "INSTALL_SCRIPT_HERE": "Installer-Skript noch vorhanden",
+    "INSTALL_SCRIPT_HERE": "Installer-Script noch vorhanden",
     "INTERNAL_ERROR_DEL": "Interner Fehler während der Dateierstellung.",
     "JI_PROJECT": "Jirafeau-Projekt",
     "ADMIN_INTERFACE_INFO": "Jirafeau hat eine Admin-Oberfläche (durch admin.php). Für den Zugriff auf die Schnittstelle kann ein Passwort festlegt werden. Um die Schnittstelle zu deaktivieren, Passwort einfach leer lassen.",
