@@ -101,9 +101,19 @@ You have several options:
 - Move var folder to a place on your server which can't be directly accessed
 - Disable automatic listing on your web server config or place a index.html in var's sub-directory (this is a limited solution)
 
-If you are using Apache, you can add the following line to your configuration to prevent people to access to your `var` folder:
+If you are using Apache, you can add the following lines to your configuration to prevent people to access to your `var` folder:
 
-`RedirectMatch 301 ^/var-.* http://my.service.jirafeau`
+```apache
+<LocationMatch "^/var-*">
+    Require all denied
+</LocationMatch>
+```
+
+Or you can put a `.htaccess` file containing this into your `var` folder:
+
+```apache
+Require all denied
+```
 
 If you are using nginx, you can add the following to your $vhost.conf:
 
