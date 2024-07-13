@@ -1,6 +1,7 @@
 lib/config.local.php
 lib/tos.local.txt
 media/custom/
+media/dark-custom/
 var-*
 *._*
 composer.phar

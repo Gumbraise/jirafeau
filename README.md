@@ -206,9 +206,9 @@ Anyway I would recommend you to use another web browser. :)
 
 You may change the default theme to any of the existing ones or a custom.
 
-Open your `lib/config.local.php` and change setting in the `style` key to the name of any folder in the `/media` directory.
+Open your `lib/config.local.php` and change setting in the `style` key to the name of any folder in the `/media` directory. If you want to change the theme for dark mode, you have to set the `dark_style` key in the config file.
 
-Hint: To create a custom theme just copy the `courgette` folder and name your theme `custom` (this way it will be ignored by git and not overwritten during updates). You are invited to enhance the existing themes and send pull requests however.
+Hint: To create a custom theme just copy the `courgette` folder and name your theme `custom` (this way it will be ignored by git and not overwritten during updates). If you want to create a custom theme for dark mode, you have to put it in a folder named `dark-custom`. You are invited to enhance the existing themes and send pull requests however.
 
 ### I found a bug, what should I do?
 
