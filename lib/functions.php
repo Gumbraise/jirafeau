@@ -879,7 +879,7 @@ function jirafeau_fileperms($path)
 function jirafeau_admin_bug_report($cfg)
 {
     $out = "<fieldset><legend>" . t('REPORTING_AN_ISSUE') . "</legend>";
-    $out .= "If you have a problem related to Jirafeau, please <a href='https://gitlab.com/jirafeau/Jirafeau/-/issues'>open an issue</a>, explain your problem in english and copy-paste the following content:<br/><br/><code>";
+    $out .= "If you have a problem related to Jirafeau, please <a href='" . JIRAFEAU_WEBSITE . "/-/issues'>open an issue</a>, explain your problem in english and copy-paste the following content:<br/><br/><code>";
 
     $out .= "# Jirafeau<br/>";
     $out .= "- version: " . JIRAFEAU_VERSION . "<br/>";
