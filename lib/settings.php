@@ -41,7 +41,7 @@ if ($cfg['debug'] === true) {
 
 /* Jirafeau package */
 define('JIRAFEAU_PACKAGE', 'Jirafeau');
-define('JIRAFEAU_VERSION', '4.6.0');
+define('JIRAFEAU_VERSION', '4.6.x-dev');
 
 define('JIRAFEAU_WEBSITE', 'https://gitlab.com/jirafeau/Jirafeau');
 
