@@ -25,7 +25,7 @@ require(JIRAFEAU_ROOT . 'lib/settings.php');
 require(JIRAFEAU_ROOT . 'lib/functions.php');
 require(JIRAFEAU_ROOT . 'lib/lang.php');
 
-if ($cfg['download_password_requirement'] === "generated"){
+if ($cfg['download_password_requirement'] === "generated") {
     $download_pass = jirafeau_gen_download_pass($cfg['download_password_gen_len'], $cfg['download_password_gen_chars']);
 }
 
@@ -114,8 +114,8 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
     </p>
     </div>
 
-    <?php if ($cfg['download_password_requirement'] === "generated"){
-    ?>
+    <?php if ($cfg['download_password_requirement'] === "generated") {
+        ?>
     <div id="show_password">
     <p><?php echo t('PSW') ?></p>
 
@@ -206,15 +206,15 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
             echo '<tr><td>' . t('ONE_TIME_DL') . ':</td>';
             echo '<td><input type="checkbox" id="one_time_download" /></td></tr>';
         }
-        if ($cfg['download_password_requirement'] === 'generated'){
+        if ($cfg['download_password_requirement'] === 'generated') {
             echo '<input type="hidden" name="key" id="input_key" value="' . $download_pass .'"/>';
-        }else{
+        } else {
             echo '<tr><td><label for="input_key">' . t('PSW') . ':' . '</label></td>';
             echo '<td><input type="password" name="key" id="input_key" autocomplete = "new-password"';
-            if ($cfg['download_password_policy'] === 'regex'){
+            if ($cfg['download_password_policy'] === 'regex') {
                 echo ' pattern="' . substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2) . '"'; //remove php delimiters
             }
-            if ($cfg['download_password_requirement'] === 'required'){
+            if ($cfg['download_password_requirement'] === 'required') {
                 echo ' required';
             }
             echo '/></td></tr>';

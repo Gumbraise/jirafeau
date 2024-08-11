@@ -1,35 +1,45 @@
-# Select docker image from https://hub.docker.com/_/php/
-image: php:8.1
-
 # Select what we should cache
 cache:
   paths:
     - vendor/
 
-before_script:
-  # Install git, the docker php image doesn't have it installed by default
-  - apt-get update -yqq
-  - apt-get install git -yqq
-  - apt-get install zip -yqq
-  # Enable necessary php extensions
-  - docker-php-ext-enable curl && docker-php-ext-enable json && docker-php-ext-enable zip && docker-php-ext-enable mbstring && docker-php-ext-enable gd && docker-php-ext-enable pdo_mysql
-  # Install composer
-  - curl -sS https://getcomposer.org/installer | php
-  # Create composer.json file manually, since this is a project without any non-dev dependencies yet
-  - php composer.phar require --dev php-parallel-lint/php-parallel-lint
-  - php composer.phar require --dev friendsofphp/php-cs-fixer:3.10.0
-  # Install all project dependencies
-  - php composer.phar install
-
-# Run tests
+# Run tests for php:8.1
 job_lint_app_81:
   image: php:8.1
-  script:
+  before_script: &before_linter_script
+    # Install git, the docker php image doesn't have it installed by default
+    - apt-get update -yqq
+    - apt-get install git -yqq
+    - apt-get install zip -yqq
+    # Enable necessary php extensions
+    - docker-php-ext-enable curl && docker-php-ext-enable json && docker-php-ext-enable zip && docker-php-ext-enable mbstring && docker-php-ext-enable gd && docker-php-ext-enable pdo_mysql
+    # Install composer
+    - curl -sS https://getcomposer.org/installer | php
+    # Create composer.json file manually, since this is a project without any non-dev dependencies yet
+    - php composer.phar require --dev php-parallel-lint/php-parallel-lint
+    - php composer.phar require --dev friendsofphp/php-cs-fixer:3.10.0
+    # Install all project dependencies
+    - php composer.phar install
+  script: &linter_script
     - ./vendor/bin/parallel-lint --exclude vendor .
     - ./vendor/bin/php-cs-fixer -vvv fix . --dry-run --using-cache=no --rules=@PSR2
 
+# Run tests for php:7.4
 job_lint_app_74:
   image: php:7.4
+  before_script: *before_linter_script
+  script: *linter_script
+
+publish:
+  image: docker:latest
+  stage: deploy
+  services:
+    - docker:dind
   script:
-    - ./vendor/bin/parallel-lint --exclude vendor .
-    - ./vendor/bin/php-cs-fixer -vvv fix . --dry-run --using-cache=no --rules=@PSR2
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker build -t $CI_REGISTRY/$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG .
+    # If we're on the default branch, also tag the image as latest
+    - docker build -t  $CI_REGISTRY/$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG -t $CI_REGISTRY/$CI_REGISTRY_IMAGE:latest .
+    - docker push $CI_REGISTRY/$CI_REGISTRY_IMAGE --all-tags
+  only:
+    - tags
