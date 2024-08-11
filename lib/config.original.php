@@ -152,6 +152,11 @@ $cfg['availability_default'] = 'month';
  */
 $cfg['one_time_download'] = true;
 
+/* When set to "true", the checkbox for deleting the file after the first download
+ * is preselected.
+ */
+$cfg['one_time_download_preselected'] = false;
+
 /* Set maximal upload size expressed in MB.
  * »0« means unlimited upload size.
  */

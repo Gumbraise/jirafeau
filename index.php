@@ -204,7 +204,13 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
         <?php
         if ($cfg['one_time_download']) {
             echo '<tr><td>' . t('ONE_TIME_DL') . ':</td>';
-            echo '<td><input type="checkbox" id="one_time_download" /></td></tr>';
+            echo '<td><input type="checkbox" id="one_time_download"';
+            
+            if ($cfg['one_time_download_preselected']) {
+                echo ' checked';
+            }
+
+            echo ' /></td></tr>';
         }
         if ($cfg['download_password_requirement'] === 'generated'){
             echo '<input type="hidden" name="key" id="input_key" value="' . $download_pass .'"/>';
