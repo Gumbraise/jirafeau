@@ -2,12 +2,10 @@
 
 ## Run Jirafeau through a pre-made Docker image
 
-**There are currently no official pre-made Docker images of Jirafeau! The repository mentioned in this section is outdated!**
-
 Jirafeau is a small PHP application so running it inside a docker container is pretty straightforward.
 
 ```
-docker pull registry.gitlab.com/jirafeau:latest
+docker pull registry.gitlab.com/jirafeau/jirafeau:latest
 docker run -it --rm -p 8080:80 registry.gitlab.com/jirafeau/jirafeau:latest
 ```
 
