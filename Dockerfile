@@ -8,24 +8,21 @@ RUN apk update && \
     ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime  && \
     echo "UTC" > /etc/timezone
 
-COPY docker/cleanup.sh /cleanup.sh
-COPY docker/run.sh /run.sh
-RUN chmod o=,ug=rx /cleanup.sh /run.sh
-COPY docker/docker_config.php /docker_config.php
+COPY --chmod=550 docker/cleanup.sh docker/run.sh  /
+COPY --chmod=640 docker/docker_config.php /docker_config.php
 
-RUN mkdir -p /usr/local/etc/php
 COPY docker/php.ini /usr/local/etc/php/php.ini
 COPY docker/lighttpd.conf /etc/lighttpd/lighttpd.conf
 
-# install jirafeau
-RUN mkdir /www
+# Install Jirafeau
 WORKDIR /www
-# Will ignore some files through .dockerignore
-COPY . .
-RUN rm -rf docker && \
+
+RUN --mount=type=bind,source=.,target=/mnt \
+    cp -r /mnt/* /www/ && \
+    rm -rf /www/docker && \
     touch /www/lib/config.local.php && \
     chown -R $(id -u lighttpd).$(id -g www-data) /www && \
-    chmod o=,ug=rwX -R /www
+    chmod 770 /www
 
-CMD /run.sh
+CMD ["/run.sh"]
 EXPOSE 80

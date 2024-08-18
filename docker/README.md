@@ -7,8 +7,8 @@
 Jirafeau is a small PHP application so running it inside a docker container is pretty straightforward.
 
 ```
-docker pull mojo42/jirafeau:latest
-docker run -it --rm -p 8080:80 mojo42/jirafeau:latest
+docker pull registry.gitlab.com/jirafeau:latest
+docker run -it --rm -p 8080:80 registry.gitlab.com/jirafeau/jirafeau:latest
 ```
 
 Then connect on [localhost:8080](http://localhost:8080/).
@@ -26,7 +26,7 @@ docker build -t your/jirafeau:latest .
 
 You may be interested in running Jirafeau on port 80:
 ```
-docker run -d -p 80:80 --sysctl net.ipv4.ip_unprivileged_port_start=80 mojo42/jirafeau
+docker run -d -p 80:80 --sysctl net.ipv4.ip_unprivileged_port_start=80 registry.gitlab.com/jirafeau/jirafeau
 ```
 
 Note that Jirafeau image does not provide any SSL/TLS. You may be interested in using [docker compose](https://docs.docker.com/compose/) combined with [Let's Encrypt](https://letsencrypt.org/).
@@ -66,7 +66,7 @@ Available options:
 
 Example:
 ```
-docker run -it -p 8080:80 --rm -e ADMIN_PASSWORD='p4ssw0rd' -e WEB_ROOT='jirafeau.mydomain.com/' -e UPLOAD_PASSWORD='foo,bar' -e PREVIEW=0  mojo42/jirafeau:latest
+docker run -it -p 8080:80 --rm -e ADMIN_PASSWORD='p4ssw0rd' -e WEB_ROOT='jirafeau.mydomain.com/' -e UPLOAD_PASSWORD='foo,bar' -e PREVIEW=0  registry.gitlab.com/jirafeau/jirafeau:latest
 ```
 
 ## Data storage
@@ -77,7 +77,7 @@ Note that configuration is not stored in /data.
 Example of using a dedicated volume to store Jirafeau data separately from the container:
 ```
 docker volume create jirafeau_data
-docker run -it --rm -p 8080:80 --mount source=jirafeau_data,target=/data mojo42/jirafeau:latest
+docker run -it --rm -p 8080:80 --mount source=jirafeau_data,target=/data registry.gitlab.com/jirafeau/jirafeau:latest
 ```
 
 ## Few notes

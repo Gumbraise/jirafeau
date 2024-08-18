@@ -81,13 +81,13 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     $key = '';
     if (isset($_POST['key'])) {
         $key = $_POST['key'];
-        if ($cfg['download_password_requirement'] !== 'generated' && $cfg['download_password_policy'] === 'regex'){
-            if (!preg_match($cfg['download_password_policy_regex'], $key)){
+        if ($cfg['download_password_requirement'] !== 'generated' && $cfg['download_password_policy'] === 'regex') {
+            if (!preg_match($cfg['download_password_policy_regex'], $key)) {
                 echo 'Error 14: The download password is not complying to the security standards.';
                 exit;
             }
         }
-    }elseif ($cfg['download_password_requirement'] !== 'optional'){
+    } elseif ($cfg['download_password_requirement'] !== 'optional') {
         echo 'Error 13: The parameter password is required.';
         exit;
     }
@@ -175,13 +175,13 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     $key = '';
     if (isset($_POST['key'])) {
         $key = $_POST['key'];
-        if ($cfg['download_password_requirement'] !== 'generated' && $cfg['download_password_policy'] === 'regex'){
-            if (!preg_match($cfg['download_password_policy_regex'], $key)){
+        if ($cfg['download_password_requirement'] !== 'generated' && $cfg['download_password_policy'] === 'regex') {
+            if (!preg_match($cfg['download_password_policy_regex'], $key)) {
                 echo 'Error 14: The download password is not complying to the security standards.';
                 exit;
             }
         }
-    }elseif ($cfg['download_password_requirement'] !== 'optional'){
+    } elseif ($cfg['download_password_requirement'] !== 'optional') {
         echo 'Error 13: The parameter password is required.';
         exit;
     }
@@ -451,13 +451,13 @@ elseif (isset($_GET['init_async'])) {
     $key = '';
     if (isset($_POST['key'])) {
         $key = $_POST['key'];
-        if ($cfg['download_password_requirement'] !== 'generated' && $cfg['download_password_policy'] === 'regex'){
-            if (!preg_match($cfg['download_password_policy_regex'], $key)){
+        if ($cfg['download_password_requirement'] !== 'generated' && $cfg['download_password_policy'] === 'regex') {
+            if (!preg_match($cfg['download_password_policy_regex'], $key)) {
                 echo 'Error 14: The download password is not complying to the security standards.';
                 exit;
             }
         }
-    }elseif ($cfg['download_password_requirement'] !== 'optional'){
+    } elseif ($cfg['download_password_requirement'] !== 'optional') {
         echo 'Error 13: The parameter password is required.';
         exit;
     }
