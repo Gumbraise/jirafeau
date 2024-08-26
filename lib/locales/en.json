@@ -1,5 +1,9 @@
 {
     "SODIUM_UNAVAILABLE": "Encryption is enabled in configuration, but the Sodium PHP module is not loaded! Encryption is not available!",
+    "ADMIN_FOLDER_INFO": "(File must be in Folder %s)",
+    "ADMIN_FILE_SELECT": "Filename",
+    "INTERNAL_ERROR_FILE_NOT_EXIST": "Requested File not found.",
+    "INTERNAL_ERROR_FP_OPEN_LOCAL": "Internal Error - Requested File could not be opened",
     "INSTALL_FILE_NOT_FOUND_TITLE": "Installation file not found",
     "INSTALL_FILE_NOT_FOUND_DESC": "Installation is not complete and install.php file does not seem to exist",
     "REPORTING_AN_ISSUE": "Reporting an issue",
@@ -17,6 +21,7 @@
     "MAX_FILE_SIZE": "Maximum file size",
     "POWERED_BY": "powered by the copyleft, libre software project Jirafeau",
     "MADE_WITH": "Made with",
+    "DESIGNED": "Designed and hosted by",
     "JI_PROJECT": "Jirafeau Project",
     "1_MIN": "One minute",
     "1_H": "One hour",

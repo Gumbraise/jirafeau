@@ -446,25 +446,62 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
                  'link' => '',
                  'delete_link' => ''));
     }
+    jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method);
+}
 
-    /* array representing no error */
-    $noerr = array('has_error' => false, 'why' => '');
-
+/**
+ * 
+ * @param bool $crypt_module_enabled 
+ * @param string $file_path 
+ * @return array [bool, string]
+ */
+function jirafeau_handle_add_file_encryption($crypt_module_enabled, $file_path) {
     /* Crypt file if option is enabled. */
     $crypted = false;
     $crypt_key = '';
-    if ($crypt == true && !(extension_loaded('sodium') == true)) {
+    if ($crypt_module_enabled == true && !(extension_loaded('sodium') == true)) {
         error_log("PHP extension sodium not loaded, won't encrypt in Jirafeau");
     }
-    if ($crypt == true && extension_loaded('sodium') == true) {
-        $crypt_key = jirafeau_encrypt_file($file['tmp_name'], $file['tmp_name'].'crypt');
+    if ($crypt_module_enabled == true && extension_loaded('sodium') == true) {
+        $crypt_key = jirafeau_encrypt_file($file_path, $file_path.'crypt');
         if (strlen($crypt_key) > 0) {
-            if (rename($file['tmp_name'].'crypt', $file['tmp_name']) === true) {
+            if (rename($file_path.'crypt', $file_path) === true) {
                 $crypted = true;
             }
         }
     }
 
+    return [$crypted, $crypt_key];
+}
+
+/**
+ * adds an uploaded or copy/linked local file
+ * @param $file the file struct given by $_FILE[]
+ * @param $one_time_download is the file a one time download ?
+ * @param $key if not empty, protect the file with this key
+ * @param $time the time of validity of the file
+ * @param $ip uploader's ip
+ * @param $crypt boolean asking to crypt or not
+ * @param $link_name_length size of the link name
+ * @param $is_upload, determines if the file is uploaded or local - it controls which file-functions are used
+ * @return array  an array containing some information
+ *   'error' => information on possible errors
+ *   'link' => the link name of the uploaded file
+ *   'delete_link' => the link code to delete file
+ */
+function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method, $is_upload = true)
+{
+    // TODO needs to be adapted
+    $move_operation = $is_upload ? 'move_uploaded_file' : 'symlink';
+
+    /* array representing no error */
+    $noerr = array('has_error' => false, 'why' => '');
+
+    $crypted = false;
+    $crypt_key = '';
+    list($crypted, $crypt_key) = jirafeau_handle_add_file_encryption($crypt, $file['tmp_name']);
+
+    
     /* file information */
     $hash = jirafeau_hash_file($file_hash_method, $file['tmp_name']);
     $name = str_replace(NL, '', trim($file['name']));
@@ -477,7 +514,11 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
     if (file_exists(VAR_FILES . $p .  $hash)) {
         $rc = unlink($file['tmp_name']);
     } elseif ((file_exists(VAR_FILES . $p) || @mkdir(VAR_FILES . $p, 0755, true))
-            && move_uploaded_file($file['tmp_name'], VAR_FILES . $p . $hash)) {
+            && 
+            //move_uploaded_file($file['tmp_name'], VAR_FILES . $p . $hash)) 
+            $move_operation($file['tmp_name'], VAR_FILES . $p . $hash))
+            {
+            
         $rc = true;
     }
     if (!$rc) {
@@ -516,7 +557,7 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
         $handle,
         $name . NL. $mime_type . NL. $size . NL. $password . NL. $time .
             NL . $hash. NL . ($one_time_download ? 'O' : 'R') . NL . time() .
-            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C2' : 'O')
+            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C' : 'O')
     );
     fclose($handle);
     $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
@@ -547,6 +588,37 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
                   'delete_link' => $delete_link_code,
                   'crypt_key' => $crypt_key);
 }
+
+
+function jirafeau_admin_list_table ($name, $file_hash, $link_hash, $visitor_function = null) {
+    echo '<fieldset><legend>';
+    if (!empty($name)) {
+        echo t('FILENAME') . ": " . jirafeau_escape($name);
+    }
+    if (!empty($file_hash)) {
+        echo t('FILE') . ": " . jirafeau_escape($file_hash);
+    }
+    if (!empty($link_hash)) {
+        echo t('LINK') . ": " . jirafeau_escape($link_hash);
+    }
+    if (empty($name) && empty($file_hash) && empty($link_hash)) {
+        echo t('LS_FILES');
+    }
+    echo '</legend>';
+    echo '<table>';
+    echo '<tr>';
+    echo '<th></th>';
+    echo '<th>' . t('ACTION') . '</th>';
+    echo '</tr>';
+    if ($visitor_function != null) {
+        $visitor_function($name, $file_hash, $link_hash);
+    }
+    echo '</table></fieldset>';
+}
+
+
+
+
 
 /**
  * Tells if a mime-type is viewable in a browser
@@ -672,103 +744,79 @@ function jirafeau_get_link($hash)
 }
 
 /**
- * List files in admin interface.
+ * List files ii folder in admin interface.
  */
 function jirafeau_admin_list($name, $file_hash, $link_hash)
 {
-    echo '<fieldset><legend>';
-    if (!empty($name)) {
-        echo t('FILENAME') . ": " . jirafeau_escape($name);
-    }
-    if (!empty($file_hash)) {
-        echo t('FILE') . ": " . jirafeau_escape($file_hash);
-    }
-    if (!empty($link_hash)) {
-        echo t('LINK') . ": " . jirafeau_escape($link_hash);
-    }
-    if (empty($name) && empty($file_hash) && empty($link_hash)) {
-        echo t('LS_FILES');
-    }
-    echo '</legend>';
-    echo '<table>';
-    echo '<tr>';
-    echo '<th></th>';
-    echo '<th>' . t('ACTION') . '</th>';
-    echo '</tr>';
+    $function = function($name, $file_hash, $link_hash) {
+         /* Get all links files. */
+        $stack = array(VAR_LINKS);
+        while (($d = array_shift($stack)) && $d != null) {
+            $dir = scandir($d);
+            foreach ($dir as $node) {
+                if (strcmp($node, '.') == 0 || strcmp($node, '..') == 0 ||
+                    preg_match('/\.tmp/i', "$node")) {
+                    continue;
+                }
+                if (is_dir($d . $node)) {
+                    /* Push new found directory. */
+                    $stack[] = $d . $node . '/';
+                } elseif (is_file($d . $node)) {
+                    /* Read link information. */
+                    $l = jirafeau_get_link($node);
+                    if (!count($l)) {
+                        continue;
+                    }
 
-    /* Get all links files. */
-    $stack = array(VAR_LINKS);
-    while (($d = array_shift($stack)) && $d != null) {
-        $dir = scandir($d);
-        foreach ($dir as $node) {
-            if (strcmp($node, '.') == 0 || strcmp($node, '..') == 0 ||
-                preg_match('/\.tmp/i', "$node")) {
-                continue;
-            }
-            if (is_dir($d . $node)) {
-                /* Push new found directory. */
-                $stack[] = $d . $node . '/';
-            } elseif (is_file($d . $node)) {
-                /* Read link information. */
-                $l = jirafeau_get_link($node);
-                if (!count($l)) {
-                    continue;
+                    /* Filter. */
+                    if (!empty($name) && !@preg_match("/$name/i", jirafeau_escape($l['file_name']))) {
+                        continue;
+                    }
+                    if (!empty($file_hash) && $file_hash != $l['hash']) {
+                        continue;
+                    }
+                    if (!empty($link_hash) && $link_hash != $node) {
+                        continue;
+                    }
+                    /* Print link information. */
+                    echo '<tr>';
+                    echo '<td>' .
+                    '<strong><a id="upload_link" href="f.php?h='. jirafeau_escape($node) .'" title="' .
+                        t('DL_PAGE') . '">' . jirafeau_escape($l['file_name']) . '</a></strong><br/>';
+                    echo t('TYPE') . ': ' . jirafeau_escape($l['mime_type']) . '<br/>';
+                    echo t('SIZE') . ': ' . jirafeau_human_size($l['file_size']) . '<br>';
+                    echo t('EXPIRE') . ': ' . ($l['time'] == -1 ? '∞' : jirafeau_get_datetimefield($l['time'])) . '<br/>';
+                    echo t('ONETIME') . ': ' . ($l['onetime'] == 'O' ? 'Yes' : 'No') . '<br/>';
+                    echo t('UPLOAD_DATE') . ': ' . jirafeau_get_datetimefield($l['upload_date']) . '<br/>';
+                    if (strlen($l['ip']) > 0) {
+                        echo t('ORIGIN') . ': ' . $l['ip'] . '<br/>';
+                    }
+                    echo '</td><td>';
+                    echo '<form method="post">' .
+                    '<input type = "hidden" name = "action" value = "download"/>' .
+                    '<input type = "hidden" name = "link" value = "' . $node . '"/>' .
+                    jirafeau_admin_csrf_field() .
+                    '<input type = "submit" value = "' . t('DL') . '" />' .
+                    '</form>' .
+                    '<form method="post">' .
+                    '<input type = "hidden" name = "action" value = "delete_link"/>' .
+                    '<input type = "hidden" name = "link" value = "' . $node . '"/>' .
+                    jirafeau_admin_csrf_field() .
+                    '<input type = "submit" value = "' . t('DEL_LINK') . '" />' .
+                    '</form>' .
+                    '<form method="post">' .
+                    '<input type = "hidden" name = "action" value = "delete_file"/>' .
+                    '<input type = "hidden" name = "hash" value = "' . $l['hash'] . '"/>' .
+                    jirafeau_admin_csrf_field() .
+                    '<input type = "submit" value = "' . t('DEL_FILE_LINKS') . '" />' .
+                    '</form>' .
+                    '</td>';
+                    echo '</tr>';
                 }
-                $ld = jirafeau_get_download_stats($node);
-
-                /* Filter. */
-                if (!empty($name) && !@preg_match("/$name/i", jirafeau_escape($l['file_name']))) {
-                    continue;
-                }
-                if (!empty($file_hash) && $file_hash != $l['hash']) {
-                    continue;
-                }
-                if (!empty($link_hash) && $link_hash != $node) {
-                    continue;
-                }
-                /* Print link information. */
-                echo '<tr>';
-                echo '<td>' .
-                '<strong><a id="upload_link" href="f.php?h='. jirafeau_escape($node) .'" title="' .
-                    t('DL_PAGE') . '">' . jirafeau_escape($l['file_name']) . '</a></strong><br/>';
-                echo t('TYPE') . ': ' . jirafeau_escape($l['mime_type']) . '<br/>';
-                echo t('SIZE') . ': ' . jirafeau_human_size($l['file_size']) . '<br>';
-                echo t('EXPIRE') . ': ' . ($l['time'] == -1 ? '∞' : jirafeau_get_datetimefield($l['time'])) . '<br/>';
-                echo t('ONETIME') . ': ' . ($l['onetime'] == 'O' ? 'Yes' : 'No') . '<br/>';
-                echo t('UPLOAD_DATE') . ': ' . jirafeau_get_datetimefield($l['upload_date']) . '<br/>';
-                if (strlen($l['ip']) > 0) {
-                    echo t('ORIGIN') . ': ' . $l['ip'] . '<br/>';
-                }
-                echo t('DOWNLOAD_COUNT') . ': ' . $ld['count'] . '<br/>';
-                if ($ld['count'] > 0) {
-                    echo t('DOWNLOAD_DATE') . ': ' . jirafeau_get_datetimefield($ld['date']) . '<br/>';
-                    echo t('DOWNLOAD_IP') . ': ' . $ld['ip'] . '<br/>';
-                }
-                echo '</td><td>';
-                echo '<form method="post">' .
-                '<input type = "hidden" name = "action" value = "download"/>' .
-                '<input type = "hidden" name = "link" value = "' . $node . '"/>' .
-                jirafeau_admin_csrf_field() .
-                '<input type = "submit" value = "' . t('DL') . '" />' .
-                '</form>' .
-                '<form method="post">' .
-                '<input type = "hidden" name = "action" value = "delete_link"/>' .
-                '<input type = "hidden" name = "link" value = "' . $node . '"/>' .
-                jirafeau_admin_csrf_field() .
-                '<input type = "submit" value = "' . t('DEL_LINK') . '" />' .
-                '</form>' .
-                '<form method="post">' .
-                '<input type = "hidden" name = "action" value = "delete_file"/>' .
-                '<input type = "hidden" name = "hash" value = "' . $l['hash'] . '"/>' .
-                jirafeau_admin_csrf_field() .
-                '<input type = "submit" value = "' . t('DEL_FILE_LINKS') . '" />' .
-                '</form>' .
-                '</td>';
-                echo '</tr>';
             }
         }
-    }
-    echo '</table></fieldset>';
+        };
+        jirafeau_admin_list_table($name, $file_hash, $link_hash, $function);
 }
 
 /**
@@ -1009,8 +1057,8 @@ function jirafeau_async_delete($ref)
 function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
 {
     /* Create temporary folder. */
-    $ref;
-    $p;
+    $ref = '';
+    $p = '';
     $code = jirafeau_gen_random(4);
     do {
         $ref = jirafeau_gen_random(32);
@@ -1718,4 +1766,230 @@ function jirafeau_write_download_stats($hash, $ip)
     $handle = fopen($filename, 'w');
     fwrite($handle, $count . NL . time() . NL . $ip);
     fclose($handle);
+}
+
+function jirafeau_create_upload_finished_box($preview = true) {
+    ?>
+
+    <div id="upload_finished">
+    <p><?php echo t('FILE_UP') ?></p>
+
+    <div id="upload_finished_download_page">
+    <p>
+        <a id="upload_link" href=""><?php echo t('DL_PAGE') ?></a>
+        <a id="upload_link_email" href=""><img id="upload_image_email"/></a>
+    </p><p>
+        <code id=upload_link_text></code>
+        <button id="upload_link_button">&#128203;</button>
+    </p>
+    </div>
+
+    <?php if ($preview == true) {
+    ?>
+    <div id="upload_finished_preview">
+    <p>
+        <a id="preview_link" href=""><?php echo t('VIEW_LINK') ?></a>
+    </p><p>
+        <code id=preview_link_text></code>
+        <button id="preview_link_button">&#128203;</button>
+    </p>
+    </div>
+    <?php
+} ?>
+
+    <div id="upload_direct_download">
+    <p>
+        <a id="direct_link" href=""><?php echo t('DIRECT_DL') ?></a>
+    </p><p>
+        <code id=direct_link_text></code>
+        <button id="direct_link_button">&#128203;</button>
+    </p>
+    </div>
+
+    <div id="upload_delete">
+    <p>
+        <a id="delete_link" href=""><?php echo t('DELETE_LINK') ?></a>
+    </p><p>
+        <code id=delete_link_text></code>
+        <button id="delete_link_button">&#128203;</button>
+    </p>
+    </div>
+
+    <div id="upload_validity">
+    <p><?php echo t('VALID_UNTIL'); ?>:</p>
+    <p id="date"></p>
+    </div>
+</div>
+<?php 
+}
+
+function jirafeau_get_expiration_time_options() {
+    return 
+    array(
+        array(
+          'value' => 'minute',
+          'label' => '1_MIN'
+        ),
+        array(
+          'value' => 'hour',
+          'label' => '1_H'
+        ),
+        array(
+          'value' => 'day',
+          'label' => '1_D'
+        ),
+        array(
+          'value' => 'week',
+          'label' => '1_W'
+        ),
+        array(
+            'value' => 'fortnight',
+            'label' => '2_W'
+        ),
+        array(
+          'value' => 'month',
+          'label' => '1_M'
+        ),
+        array(
+          'value' => 'quarter',
+          'label' => '1_Q'
+        ),
+        array(
+          'value' => 'year',
+          'label' => '1_Y'
+        ),
+        array(
+          'value' => 'none',
+          'label' => 'NONE'
+        )
+      );
+}
+
+
+
+ /**
+  * 
+  * creates the time selection field
+  * @param mixed $cfg 
+  * @return void 
+  */
+  function jirafeau_create_selection_array($cfg) {
+    echo 
+    '<select name="time" id="select_time">';
+        
+        
+        $expirationTimeOptions = jirafeau_get_expiration_time_options();
+
+        foreach ($expirationTimeOptions as $expirationTimeOption) {
+            $selected = ($expirationTimeOption['value'] === $cfg['availability_default'])? 'selected="selected"' : '';
+            if (true === $cfg['availabilities'][$expirationTimeOption['value']]) {
+                echo '<option value="' . $expirationTimeOption['value'] . '" ' .
+              $selected . '>' . t($expirationTimeOption['label']) . '</option>';
+            }
+        }
+        echo '</select>';
+ }
+
+ function jirafeau_datestr_to_int ($time_str) {
+    $time = time();
+    switch ($time_str) {
+        case 'minute':
+            $time += JIRAFEAU_MINUTE;
+            break;
+        case 'hour':
+            $time += JIRAFEAU_HOUR;
+            break;
+        case 'day':
+            $time += JIRAFEAU_DAY;
+            break;
+        case 'week':
+            $time += JIRAFEAU_WEEK;
+            break;
+        case 'fortnight':
+            $time += JIRAFEAU_FORTNIGHT;
+            break;
+        case 'month':
+            $time += JIRAFEAU_MONTH;
+            break;
+        case 'quarter':
+            $time += JIRAFEAU_QUARTER;
+            break;
+        case 'year':
+            $time += JIRAFEAU_YEAR;
+            break;
+       default:
+            $time = JIRAFEAU_INFINITY;
+            break;
+    }
+    return $time;
+}
+
+
+
+
+/**
+ * links or copy a local file 
+ * TODO: boolean in config for linking
+ * @param string $filepath 
+ * @param $one_time_download is the file a one time download ?
+ * @param $key if not empty, protect the file with this key
+ * @param $time the time of validity of the file
+ * @param $ip uploader's ip
+ * @param $crypt boolean asking to crypt or not
+ * @param $link_name_length size of the link name
+ * @returns an array containing some information
+ *   'error' => information on possible errors
+ *   'link' => the link name of the uploaded file
+ *   'delete_link' => the link code to delete file
+ */
+function jirafeau_copy_local_file($local_file_path, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method) {
+    
+    if (!file_exists($local_file_path)) {
+        return (array(
+            'error' =>
+              array('has_error' => true,
+                     'why' => t('INTERNAL_ERROR_FILE_NOT_EXIST')),
+            'link' =>'',
+            'delete_link' => ''));
+    }
+    if(
+        // sanity check if file can be opened
+        $file = fopen($local_file_path, "r")
+    )
+    {
+        // close file pointer - it's not needed here
+        fclose($file);
+        $time_in_int = jirafeau_datestr_to_int($time);
+        return jirafeau_add_file(
+            jirafeau_create_file_array($local_file_path),
+            $one_time_download,
+            $key,
+            $time_in_int,
+            $ip,
+            $crypt,
+            $link_name_length,
+            $file_hash_method,
+            false
+        );
+    }
+    else {
+        return (array(
+            'error' =>
+              array('has_error' => true,
+                     'why' => t('INTERNAL_ERROR_FP_OPEN_LOCAL')),
+            'link' =>'',
+            'delete_link' => ''));
+    }
+    
+}
+
+
+function jirafeau_create_file_array($file_path) {
+    return 
+    [
+       'type' => mime_content_type($file_path),
+       'tmp_name' => $file_path,
+       'name' => basename($file_path),
+       'size' => filesize($file_path),
+    ];
 }

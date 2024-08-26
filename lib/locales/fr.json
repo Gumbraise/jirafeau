@@ -1,5 +1,13 @@
 {
+    "DOWNLOAD_IP": "",
+    "DOWNLOAD_DATE": "",
+    "DOWNLOAD_COUNT": "",
     "SODIUM_UNAVAILABLE": "",
+    "ADMIN_FOLDER_INFO": "",
+    "ADMIN_FILE_SELECT": "",
+    "INTERNAL_ERROR_FILE_NOT_EXIST": "",
+    "INTERNAL_ERROR_FP_OPEN_LOCAL": "",
+    "DESIGNED": "",
     "INSTALL_FILE_NOT_FOUND_TITLE": "Fichier d'installation non-trouvé",
     "INSTALL_FILE_NOT_FOUND_DESC": "L'installation est incomplète et le ficher install.php est introuvable",
     "2_W": "Deux semaines",

@@ -92,40 +92,11 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         exit;
     }
 
-    $time = time();
     if (!isset($_POST['time']) || !$cfg['availabilities'][$_POST['time']]) {
         echo 'Error 4: The parameter time is invalid.';
         exit;
     } else {
-        switch ($_POST['time']) {
-            case 'minute':
-                $time += JIRAFEAU_MINUTE;
-                break;
-            case 'hour':
-                $time += JIRAFEAU_HOUR;
-                break;
-            case 'day':
-                $time += JIRAFEAU_DAY;
-                break;
-            case 'week':
-                $time += JIRAFEAU_WEEK;
-                break;
-            case 'fortnight':
-                $time += JIRAFEAU_FORTNIGHT;
-                break;
-            case 'month':
-                $time += JIRAFEAU_MONTH;
-                break;
-            case 'quarter':
-                $time += JIRAFEAU_QUARTER;
-                break;
-            case 'year':
-                $time += JIRAFEAU_YEAR;
-                break;
-            default:
-                $time = JIRAFEAU_INFINITY;
-                break;
-        }
+        $time = jirafeau_datestr_to_int($_POST['time']);
     }
 
     // Check file size
@@ -468,40 +439,11 @@ elseif (isset($_GET['init_async'])) {
         exit;
     }
 
-    $time = time();
     if (!isset($_POST['time']) || !$cfg['availabilities'][$_POST['time']]) {
         echo 'Error 22';
         exit;
     } else {
-        switch ($_POST['time']) {
-            case 'minute':
-                $time += JIRAFEAU_MINUTE;
-                break;
-            case 'hour':
-                $time += JIRAFEAU_HOUR;
-                break;
-            case 'day':
-                $time += JIRAFEAU_DAY;
-                break;
-            case 'week':
-                $time += JIRAFEAU_WEEK;
-                break;
-            case 'fortnight':
-                $time += JIRAFEAU_FORTNIGHT;
-                break;
-            case 'month':
-                $time += JIRAFEAU_MONTH;
-                break;
-            case 'quarter':
-                $time += JIRAFEAU_QUARTER;
-                break;
-            case 'year':
-                $time += JIRAFEAU_YEAR;
-                break;
-            default:
-                $time = JIRAFEAU_INFINITY;
-                break;
-        }
+        $time = jirafeau_datestr_to_int($_POST['time']);
     }
 
     if ($cfg['store_uploader_ip']) {

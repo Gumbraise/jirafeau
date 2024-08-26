@@ -101,70 +101,8 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
 }
 
 ?>
-<div id="upload_finished">
-    <p><?php echo t('FILE_UP') ?></p>
 
-    <div id="upload_finished_download_page">
-    <p>
-        <a id="upload_link" href=""><?php echo t('DL_PAGE') ?></a>
-        <a id="upload_link_email" href=""><img id="upload_image_email"/></a>
-    </p><p>
-        <code id=upload_link_text></code>
-        <button id="upload_link_button">&#128203;</button>
-    </p>
-    </div>
-
-    <?php if ($cfg['download_password_requirement'] === "generated") {
-        ?>
-    <div id="show_password">
-    <p><?php echo t('PSW') ?></p>
-
-    <div id="download_password">
-    <p>
-        <?php echo '<input id="output_key" value="' . $download_pass . '"/>'?>
-        <button id="password_copy_button">&#128203;</button>
-    </p>
-    </div>
-    </div>
-    <?php
-    }?>
-
-    <?php if ($cfg['preview'] == true) {
-        ?>
-    <div id="upload_finished_preview">
-    <p>
-        <a id="preview_link" href=""><?php echo t('VIEW_LINK') ?></a>
-    </p><p>
-        <code id=preview_link_text></code>
-        <button id="preview_link_button">&#128203;</button>
-    </p>
-    </div>
-    <?php
-    } ?>
-
-    <div id="upload_direct_download">
-    <p>
-        <a id="direct_link" href=""><?php echo t('DIRECT_DL') ?></a>
-    </p><p>
-        <code id=direct_link_text></code>
-        <button id="direct_link_button">&#128203;</button>
-    </p>
-    </div>
-
-    <div id="upload_delete">
-    <p>
-        <a id="delete_link" href=""><?php echo t('DELETE_LINK') ?></a>
-    </p><p>
-        <code id=delete_link_text></code>
-        <button id="delete_link_button">&#128203;</button>
-    </p>
-    </div>
-
-    <div id="upload_validity">
-    <p><?php echo t('VALID_UNTIL'); ?>:</p>
-    <p id="date"></p>
-    </div>
-</div>
+<?php jirafeau_create_upload_finished_box($cfg['preview']); ?>
 
 <div id="uploading">
     <p>
@@ -227,55 +165,9 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
         }?>
         <tr>
         <td><label for="select_time"><?php echo t('TIME_LIM') . ':'; ?></label></td>
-        <td><select name="time" id="select_time">
-        <?php
-$expirationTimeOptions = array(
-  array(
-    'value' => 'minute',
-    'label' => '1_MIN'
-  ),
-  array(
-    'value' => 'hour',
-    'label' => '1_H'
-  ),
-  array(
-    'value' => 'day',
-    'label' => '1_D'
-  ),
-  array(
-    'value' => 'week',
-    'label' => '1_W'
-  ),
-  array(
-      'value' => 'fortnight',
-      'label' => '2_W'
-  ),
-  array(
-    'value' => 'month',
-    'label' => '1_M'
-  ),
-  array(
-    'value' => 'quarter',
-    'label' => '1_Q'
-  ),
-  array(
-    'value' => 'year',
-    'label' => '1_Y'
-  ),
-  array(
-    'value' => 'none',
-    'label' => 'NONE'
-  )
-);
-foreach ($expirationTimeOptions as $expirationTimeOption) {
-    $selected = ($expirationTimeOption['value'] === $cfg['availability_default'])? 'selected="selected"' : '';
-    if (true === $cfg['availabilities'][$expirationTimeOption['value']]) {
-        echo '<option value="' . $expirationTimeOption['value'] . '" ' .
-              $selected . '>' . t($expirationTimeOption['label']) . '</option>';
-    }
-}
-?>
-        </select></td>
+        <td>
+            <?php jirafeau_create_selection_array($cfg); ?> 
+        </td>
         </tr>
 
         <?php
