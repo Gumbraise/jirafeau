@@ -4,6 +4,7 @@
         <?php
           echo t('MADE_WITH') .
             ' <a href="' . JIRAFEAU_WEBSITE . '" target="_blank" rel="noopener noreferrer">' . t('JI_PROJECT') . '</a>' .
+            '<p> ' . t('DESIGNED')  . ' ' .  $cfg['contactperson'] . '</p>'  .
             ' (<a href="https://www.gnu.org/licenses/agpl.html" target="_blank" rel="noopener noreferrer"><abbr title="GNU Affero General Public License v3">AGPL-3.0</abbr></a>)';
         ?>
         <!-- Installation dependent links -->

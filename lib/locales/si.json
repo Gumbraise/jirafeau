@@ -1,5 +1,13 @@
 {
+    "DOWNLOAD_IP": "",
+    "DOWNLOAD_DATE": "",
+    "DOWNLOAD_COUNT": "",
     "SODIUM_UNAVAILABLE": "",
+    "ADMIN_FOLDER_INFO": "",
+    "ADMIN_FILE_SELECT": "",
+    "INTERNAL_ERROR_FILE_NOT_EXIST": "",
+    "INTERNAL_ERROR_FP_OPEN_LOCAL": "",
+    "DESIGNED": "",
     "REPORTING_AN_ISSUE": "",
     "SIZE_DATA": "",
     "INCOMPATIBLE_OPTIONS_W": "",

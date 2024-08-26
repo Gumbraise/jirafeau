@@ -18,6 +18,103 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+ function template_js_preview_link() {
+    ?>
+    if (!!document.getElementById('preview_link'))
+    {
+        document.getElementById('upload_finished_preview').style.display = 'none';
+        var preview_link_href = 'f.php?h=' + reference + '&p=1';
+        if (crypt_key.length > 0)
+        {
+            preview_link_href += '&k=' + crypt_key;
+        }
+
+        // Test if content can be previewed
+        type = document.getElementById('file_select').files[0].type;
+        if ((type.startsWith('image/')
+                || type.startsWith('audio')
+                || type.startsWith('text/plain')
+                || type.startsWith('video/'))
+            && !type.includes('image/svg+xml'))
+        {
+            document.getElementById('preview_link').href = preview_link_href;
+            document.getElementById('preview_link_text').innerHTML = web_root + preview_link_href;
+            document.getElementById('upload_finished_preview').style.display = '';
+        }
+    } 
+    <?php
+ }
+function template_js_download_page() {
+    ?>
+    // Download page
+    var download_link_href = 'f.php?h=' + reference;
+    if (crypt_key.length > 0)
+    {
+        download_link_href += '&k=' + crypt_key;
+    }
+    if (!!document.getElementById('upload_finished_download_page'))
+    {
+        document.getElementById('upload_link').href = download_link_href;
+        document.getElementById('upload_link_text').innerHTML = web_root + download_link_href;
+    }
+    <?php
+}
+function template_js_email_link() {
+    ?>
+    // Email link
+    var b = encodeURIComponent("<?php echo t("DL"); ?> \"" + filename + "\":") + "%0D" + "%0A";
+    b += encodeURIComponent(web_root + download_link_href) + "%0D" + "%0A";
+    if (false == isEmpty(date))
+    {
+        b += "%0D" + "%0A" + encodeURIComponent("<?php echo t("VALID_UNTIL"); ?>: " + date.format('YYYY-MM-DD hh:mm (GMT O)')) + "%0D" + "%0A";
+        document.getElementById('upload_link_email').href = "mailto:?body=" + b + "&subject=" + encodeURIComponent(filename);
+    }
+    <?php
+}
+function template_js_delete_link() {
+    ?>
+    // Delete link
+    var delete_link_href = 'f.php?h=' + reference + '&d=' + delete_code;
+    document.getElementById('delete_link').href = delete_link_href;
+    document.getElementById('delete_link_text').innerHTML = web_root + delete_link_href;
+    <?php
+}
+ function template_js_direct_download() {
+    ?>
+    // Direct download link
+    var direct_download_link_href = 'f.php?h=' + reference + '&d=1';
+    if (crypt_key.length > 0)
+    {
+        direct_download_link_href += '&k=' + crypt_key;
+    }
+    document.getElementById('direct_link').href = direct_download_link_href;
+    document.getElementById('direct_link_text').innerHTML = web_root + direct_download_link_href;
+    <?php
+ }
+ function template_js_date_function() {
+    ?>
+    // Validity date
+    if (isEmpty(date))
+    {
+        document.getElementById('date').style.display = 'none';
+    }
+    else {
+        document.getElementById('date').innerHTML = 
+        '<span class="datetime"' 
+            + 'data-datetime="'
+            + dateToUtcString(date) + ' (GMT"'
+            + 'title="'
+            + dateToUtcString(date) + ' (GMT)">'
+            + date.format('YYYY-MM-DD hh:mm (GMT O)')
+            + '</span>';
+            document.getElementById('date').style.display = '';
+    }
+    <?php
+ }
+
+
+
+
 header('Content-Type: text/javascript');
 define('JIRAFEAU_ROOT', dirname(__FILE__) . '/../');
 
@@ -124,6 +221,22 @@ function convertAllDatetimeFields() {
     }
 }
 
+// evil copy and paste from show_link - TODO refactor show link 
+function show_link_from_php (file_name,file_type, reference, delete_code, crypt_key, date)
+{
+    <?php template_js_download_page(); ?>
+    
+
+    var filename = file_name;
+    <?php template_js_email_link(); ?>
+    <?php template_js_delete_link(); ?>
+    <?php template_js_date_function(); ?>
+    var type = file_type;
+    <?php template_js_direct_download();?>
+}
+
+
+
 function show_link (reference, delete_code, crypt_key, date)
 {
     // Upload finished
@@ -132,78 +245,23 @@ function show_link (reference, delete_code, crypt_key, date)
     document.getElementById('upload_finished').style.display = '';
     document.title = "100% - <?php echo empty($cfg['title']) ? 'Jirafeau' : $cfg['title']; ?>";
 
-    // Download page
-    var download_link_href = 'f.php?h=' + reference;
-    if (crypt_key.length > 0)
-    {
-        download_link_href += '&k=' + crypt_key;
-    }
-    if (!!document.getElementById('upload_finished_download_page'))
-    {
-        document.getElementById('upload_link').href = download_link_href;
-        document.getElementById('upload_link_text').innerHTML = web_root + download_link_href;
-    }
-
+    <?php template_js_download_page(); ?>
     // Email link
     var filename = document.getElementById('file_select').files[0].name;
-    var b = encodeURIComponent("<?php echo t("DL"); ?> \"" + filename + "\":") + "%0D" + "%0A";
-    b += encodeURIComponent(web_root + download_link_href) + "%0D" + "%0A";
-    if (false == isEmpty(date))
-    {
-        b += "%0D" + "%0A" + encodeURIComponent("<?php echo t("VALID_UNTIL"); ?>: " + date.format('YYYY-MM-DD hh:mm (GMT O)')) + "%0D" + "%0A";
-        document.getElementById('upload_link_email').href = "mailto:?body=" + b + "&subject=" + encodeURIComponent(filename);
-    }
 
-    // Delete link
-    var delete_link_href = 'f.php?h=' + reference + '&d=' + delete_code;
-    document.getElementById('delete_link').href = delete_link_href;
-    document.getElementById('delete_link_text').innerHTML = web_root + delete_link_href;
+    <?php template_js_email_link(); ?>
+    
+    <?php template_js_delete_link(); ?>
+    <?php template_js_date_function(); ?>
 
-    // Validity date
-    if (isEmpty(date))
-    {
-        document.getElementById('date').style.display = 'none';
-    }
-    else {
-        document.getElementById('date').innerHTML = '<span class="datetime" title="'
-            + dateToUtcString(date) + ' (GMT)">'
-            + date.format('YYYY-MM-DD hh:mm (GMT O)')
-            + '</span>';
-        document.getElementById('date').style.display = '';
-    }
 
     // Preview link (if allowed)
-    if (!!document.getElementById('preview_link'))
-    {
-        document.getElementById('upload_finished_preview').style.display = 'none';
-        var preview_link_href = 'f.php?h=' + reference + '&p=1';
-        if (crypt_key.length > 0)
-        {
-            preview_link_href += '&k=' + crypt_key;
-        }
+   
+    var type = document.getElementById('file_select').files[0].type;
+    <?php template_js_preview_link(); ?>
 
-        // Test if content can be previewed
-        type = document.getElementById('file_select').files[0].type;
-        if ((type.startsWith('image/')
-                || type.startsWith('audio')
-                || type.startsWith('text/plain')
-                || type.startsWith('video/'))
-            && !type.includes('image/svg+xml'))
-        {
-            document.getElementById('preview_link').href = preview_link_href;
-            document.getElementById('preview_link_text').innerHTML = web_root + preview_link_href;
-            document.getElementById('upload_finished_preview').style.display = '';
-        }
-    }
+    <?php template_js_direct_download();?>
 
-    // Direct download link
-    var direct_download_link_href = 'f.php?h=' + reference + '&d=1';
-    if (crypt_key.length > 0)
-    {
-        direct_download_link_href += '&k=' + crypt_key;
-    }
-    document.getElementById('direct_link').href = direct_download_link_href;
-    document.getElementById('direct_link_text').innerHTML = web_root + direct_download_link_href;
 
     // Hide preview and direct download link if password is set
     if (document.getElementById('input_key').value.length > 0)

@@ -311,4 +311,6 @@ Feel free to create an [issue](https://gitlab.com/jirafeau/Jirafeau/-/issues) if
 
 ### Can I buy you a coffee?
 
-You can [drop few bucks for Jérôme Jutteau](https://www.paypal.com/paypalme/jeromejutteau).
+You can [drop few bucks for Jérôme Jutteau](https://www.paypal.com/paypalme/jeromejutteau)
+
+Many Thanks <3
