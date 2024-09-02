@@ -9,7 +9,7 @@ Jirafeau is a "one-click-filesharing": Select your file, upload, share a link. T
 
 See [jirafeau.net](https://jirafeau.net/) for a demo.
 
-![Screenshot1](http://i.imgur.com/TPjh48P.png)
+![Screenshot1](screenshots/upload1.png)
 
 ## DISCLAMER
 
@@ -50,15 +50,14 @@ Jirafeau project won't evolve to a file manager and will focus to keep a very fe
 
 ## Screenshots
 
-- [Installation - Step 1](http://i.imgur.com/hmpT1eN.jpg)
-- [Installation - Step 2](http://i.imgur.com/2e0UGKE.jpg)
-- [Installation - Step 3](http://i.imgur.com/ofAjLXh.jpg)
-- [Installation - Step 4](http://i.imgur.com/WXqnfqJ.jpg)
-- [Upload - Step 1](http://i.imgur.com/SBmSwzJ.jpg)
-- [Upload - Step 2](http://i.imgur.com/wzPkb1Z.jpg)
-- [Upload - Progress](http://i.imgur.com/i6n95kv.jpg)
-- [Upload - Confirmation page](http://i.imgur.com/P2oS1MY.jpg)
-- [Admin Interface](http://i.imgur.com/nTdsVzn.png)
+- [Installation - Step 1](screenshots/install1.png)
+- [Installation - Step 2](screenshots/install2.png)
+- [Installation - Step 3](screenshots/install3.png)
+- [Upload - Step 1](screenshots/upload1.png)
+- [Upload - Step 2](screenshots/upload2.png)
+- [Upload - Progress](screenshots/upload_progress.png)
+- [Upload - Confirmation page](screenshots/upload_confirm.png)
+- [Admin Interface](screenshots/admin.png)
 
 ## Installation
 
