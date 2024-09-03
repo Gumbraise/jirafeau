@@ -12,6 +12,15 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
+## Current snapshots
+
+- Lots of code refactoring
+- Few more little fixes
+- Typo and spelling mistakes
+
+New configuration items:
+- `one_time_download_preselected` for preselecting the checkbox for deleting the file after the first download
+
 ## Version 4.6.0
 
 - New configuration options for allowing to require, check or generate file download passwords
