@@ -1,7 +1,9 @@
 <?php
 /*
  *  Jirafeau, your web file repository
+ *  Copyright (C) 2008  Julien "axolotl" BERNARD <axolotl@magieeternelle.org>
  *  Copyright (C) 2015  Jerome Jutteau <jerome@jutteau.fr>
+ *  Copyright (C) 2024  Jirafeau project <https://gitlab.com/jirafeau> (see AUTHORS.md)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU Affero General Public License as
@@ -14,7 +16,7 @@
  *  GNU Affero General Public License for more details.
  *
  *  You should have received a copy of the GNU Affero General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 session_start();
 define('JIRAFEAU_ROOT', dirname(__FILE__) . '/');
