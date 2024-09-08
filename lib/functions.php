@@ -3,7 +3,7 @@
  *  Jirafeau, your web file repository
  *  Copyright (C) 2008  Julien "axolotl" BERNARD <axolotl@magieeternelle.org>
  *  Copyright (C) 2015  Jerome Jutteau <jerome@jutteau.fr>
- *  Copyright (C) 2015  Nicola Spanti (RyDroid) <dev@nicola-spanti.info>
+ *  Copyright (C) 2024  Jirafeau project <https://gitlab.com/jirafeau> (see AUTHORS.md)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU Affero General Public License as
