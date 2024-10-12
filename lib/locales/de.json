@@ -1,4 +1,7 @@
 {
+    "NO": "Nein",
+    "YES": "Ja",
+    "ENCRYPTED": "Verschlüsselt",
     "DOWNLOAD_IP": "",
     "DOWNLOAD_DATE": "",
     "DOWNLOAD_COUNT": "",

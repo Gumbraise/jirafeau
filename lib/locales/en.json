@@ -1,4 +1,7 @@
 {
+    "NO": "No",
+    "YES": "Yes",
+    "ENCRYPTED": "Encrypted",
     "SODIUM_UNAVAILABLE": "Encryption is enabled in configuration, but the Sodium PHP module is not loaded! Encryption is not available!",
     "ADMIN_FOLDER_INFO": "(File must be in Folder %s)",
     "ADMIN_FILE_SELECT": "Filename",

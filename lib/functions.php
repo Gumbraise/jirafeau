@@ -744,7 +744,7 @@ function jirafeau_get_link($hash)
 }
 
 /**
- * List files ii folder in admin interface.
+ * List files in admin interface.
  */
 function jirafeau_admin_list($name, $file_hash, $link_hash)
 {
@@ -780,25 +780,39 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     }
                     /* Print link information. */
                     echo '<tr>';
-                    echo '<td>' .
-                    '<strong><a id="upload_link" href="f.php?h='. jirafeau_escape($node) .'" title="' .
-                        t('DL_PAGE') . '">' . jirafeau_escape($l['file_name']) . '</a></strong><br/>';
+                    echo '<td><strong>';
+
+                    if (!$l['crypted'] && !$l['crypted_legacy']) {
+                        echo'<a href="f.php?h='. jirafeau_escape($node) .'" title="' .
+                        t('DL_PAGE') . '">' . jirafeau_escape($l['file_name']) . '</a>';
+                    }
+                    else {
+                        echo jirafeau_escape($l['file_name']);
+                    }
+
+                    echo '</strong><br/>';
+
                     echo t('TYPE') . ': ' . jirafeau_escape($l['mime_type']) . '<br/>';
                     echo t('SIZE') . ': ' . jirafeau_human_size($l['file_size']) . '<br>';
                     echo t('EXPIRE') . ': ' . ($l['time'] == -1 ? '∞' : jirafeau_get_datetimefield($l['time'])) . '<br/>';
-                    echo t('ONETIME') . ': ' . ($l['onetime'] == 'O' ? 'Yes' : 'No') . '<br/>';
+                    echo t('ONETIME') . ': ' . ($l['onetime'] == 'O' ? t('YES') : t('NO')) . '<br/>';
+                    echo t('ENCRYPTED') . ': ' . (($l['crypted'] || $l['crypted_legacy']) ? t('YES') : t('NO')) . '<br/>';
                     echo t('UPLOAD_DATE') . ': ' . jirafeau_get_datetimefield($l['upload_date']) . '<br/>';
                     if (strlen($l['ip']) > 0) {
                         echo t('ORIGIN') . ': ' . $l['ip'] . '<br/>';
                     }
                     echo '</td><td>';
+
+                    if (!$l['crypted'] && !$l['crypted_legacy']) {
+                        echo '<form method="post">' .
+                        '<input type = "hidden" name = "action" value = "download"/>' .
+                        '<input type = "hidden" name = "link" value = "' . $node . '"/>' .
+                        jirafeau_admin_csrf_field() .
+                        '<input type = "submit" value = "' . t('DL') . '" />' .
+                        '</form>';
+                    }
+
                     echo '<form method="post">' .
-                    '<input type = "hidden" name = "action" value = "download"/>' .
-                    '<input type = "hidden" name = "link" value = "' . $node . '"/>' .
-                    jirafeau_admin_csrf_field() .
-                    '<input type = "submit" value = "' . t('DL') . '" />' .
-                    '</form>' .
-                    '<form method="post">' .
                     '<input type = "hidden" name = "action" value = "delete_link"/>' .
                     '<input type = "hidden" name = "link" value = "' . $node . '"/>' .
                     jirafeau_admin_csrf_field() .
