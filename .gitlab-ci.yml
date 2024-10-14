@@ -3,9 +3,9 @@ cache:
   paths:
     - vendor/
 
-# Run tests for php:8.1
-job_lint_app_81:
-  image: php:8.1
+# Run tests for php:8.2
+job_lint_app_82:
+  image: php:8.2
   before_script: &before_linter_script
     # Install git, the docker php image doesn't have it installed by default
     - apt-get update -yqq
@@ -23,6 +23,12 @@ job_lint_app_81:
   script: &linter_script
     - ./vendor/bin/parallel-lint --exclude vendor .
     - ./vendor/bin/php-cs-fixer -vvv check . --using-cache=no --rules=@PSR12,-single_space_around_construct
+
+# Run tests for php:8.1
+job_lint_app_81:
+  image: php:8.1
+  before_script: *before_linter_script
+  script: *linter_script
 
 # Run tests for php:7.4
 job_lint_app_74:
