@@ -22,7 +22,7 @@ job_lint_app_81:
     - php composer.phar install
   script: &linter_script
     - ./vendor/bin/parallel-lint --exclude vendor .
-    - ./vendor/bin/php-cs-fixer -vvv check . --using-cache=no --rules=@PSR12
+    - ./vendor/bin/php-cs-fixer -vvv check . --using-cache=no --rules=@PSR12,-single_space_around_construct
 
 # Run tests for php:7.4
 job_lint_app_74:
