@@ -63,7 +63,7 @@ Jirafeau project won't evolve to a file manager and will focus to keep a very fe
 
 This shows how to install Jirafeau by your own, it's quite simple but you can
 also use a [docker image](https://gitlab.com/jirafeau/Jirafeau/container_registry/) or build
-it yourself. Check [docker folder](docker/README.md) for more informations.
+it yourself. Check [docker folder](docker/README.md) for more information.
 
 System requirements:
 - PHP >= 7.4
@@ -90,12 +90,13 @@ If you have some troubles, consider the following cases
 
 - Check your `/lib/config.local.php` file and compare it with `/lib/config.original.php`, the configuration syntax or a parameter may have changed
 - Check owner and permissions of your files
-- set `debug` option to `true` to check any warning or error
+- Set `debug` option to `true` to check any warning or error
 
 ## Security
 
 `var` directory contains all files and links. It is randomly named to limit access but you may add better protection to prevent un-authorized access to it.
 You have several options:
+
 - Configure a `.htaccess`
 - Move var folder to a place on your server which can't be directly accessed
 - Disable automatic listing on your web server config or place a index.html in var's sub-directory (this is a limited solution)
@@ -222,7 +223,7 @@ Hint: To create a custom theme just copy the `courgette` folder and name your th
 ### I found a bug, what should I do?
 
 Feel free to open a bug in the [GitLab's issues](https://gitlab.com/jirafeau/Jirafeau/issues).
-If you can, please copy-paste informations related to bug opening provided in admin interface.
+If you can, please copy-paste information related to bug opening provided in admin interface.
 Admin interface can be reached by accessing `/admin.php`.
 
 ### How to set maximum file size?
@@ -236,8 +237,8 @@ If you don't want to allow unlimited upload size, you can still setup a maximal 
 
 ### How can I edit an option?
 
-Documentation of all default options are located in [lib/config.original.php](https://gitlab.com/jirafeau/Jirafeau/blob/master/lib/config.original.php).
-If you want to change an option, just edit your `lib/config.local.php`.
+Documentation of all default options are located in [/lib/config.original.php](https://gitlab.com/jirafeau/Jirafeau/blob/master/lib/config.original.php).
+If you want to change an option, just edit your `/lib/config.local.php`.
 
 ### How can I change the Terms of Service?
 

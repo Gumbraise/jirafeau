@@ -14,7 +14,8 @@
 
 ## Current snapshots
 
-- Lots of code refactoring
+- Removed the download button and the corresponding link for encrypted files from the admin interface
+- Lots of code refactoring and cleanup
 - Few more little fixes
 - Typo and spelling mistakes
 
