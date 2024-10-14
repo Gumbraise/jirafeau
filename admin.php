@@ -37,17 +37,18 @@ if (php_sapi_name() == "cli") {
     if ($cfg['installation_done'] == false) {
         die("Installation not completed yet.\n");
     }
-    if ((count($argv)>1) && $argv[1]=="clean_expired") {
+    if ((count($argv) > 1) && $argv[1] == 'clean_expired') {
         $total = jirafeau_admin_clean();
         echo "$total expired files deleted.\n";
-    } elseif ((count($argv)>1) && $argv[1]=="clean_async") {
+    } elseif ((count($argv) > 1) && $argv[1] == 'clean_async') {
         $total = jirafeau_admin_clean_async();
         echo "$total old unfinished transfers deleted.\n";
     } else {
         die("No command found. Should be admin.php <clean_expired|clean_async>.\n");
     }
-// Second check: Challenge by IP
-} elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
+}
+/* Second check: Challenge by IP */
+elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
     /* Disable admin interface if we have a empty admin password. */
     if (empty($cfg['admin_password']) && empty($cfg['admin_http_auth_user'])) {
         require(JIRAFEAU_ROOT . 'lib/template/header.php');

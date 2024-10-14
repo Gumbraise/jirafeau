@@ -175,7 +175,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     }
     if (strlen($d) > 0 && $d == $link['link_code']) {
         jirafeau_delete_link($link_name);
-        echo "Ok";
+        echo 'Ok';
         exit;
     }
     if ($link['time'] != JIRAFEAU_INFINITY && time() > $link['time']) {
@@ -217,8 +217,8 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
 } elseif (isset($_GET['get_version'])) {
     echo JIRAFEAU_VERSION;
 } elseif (isset($_GET['lang'])) {
-    $l=$_GET['lang'];
-    if ($l == "bash") {
+    $l = $_GET['lang'];
+    if ($l == 'bash') {
         ?>
 #!/bin/bash
 

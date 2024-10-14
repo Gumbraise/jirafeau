@@ -93,7 +93,7 @@ function jirafeau_gen_random($l)
         return 42;
     }
 
-    $code="";
+    $code = '';
     for ($i = 0; $i < $l; $i++) {
         $code .= dechex(rand(0, 15));
     }
@@ -106,7 +106,7 @@ function jirafeau_gen_download_pass($length, $allowed_chars)
     if ($length <= 0) {
         return false;
     }
-    $pass="";
+    $pass = '';
     for ($i = 0; $i < $length; $i++) {
         $pass .= $allowed_chars[rand(0, strlen($allowed_chars) - 1)];
     }
@@ -143,10 +143,10 @@ function jirafeau_human_size($octets)
 // Convert UTC timestamp to a datetime field
 function jirafeau_get_datetimefield($timestamp)
 {
-    $ts = date_create("@" . $timestamp);
+    $ts = date_create('@' . $timestamp);
     $content = '<span class="datetime" data-datetime="' . date_format($ts, 'Y-m-d H:i') . '">'
         . date_format($ts, 'Y-m-d H:i') . ' (GMT)</span>';
-    
+
     return $content;
 }
 
@@ -397,7 +397,7 @@ function jirafeau_hash_file($method, $file_path)
 function jirafeau_md5_outside($file_path)
 {
     $out = false;
-    $handle = fopen($file_path, "r");
+    $handle = fopen($file_path, 'r');
     if ($handle === false) {
         return false;
     }
@@ -450,12 +450,13 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
 }
 
 /**
- * 
- * @param bool $crypt_module_enabled 
- * @param string $file_path 
+ *
+ * @param bool $crypt_module_enabled
+ * @param string $file_path
  * @return array [bool, string]
  */
-function jirafeau_handle_add_file_encryption($crypt_module_enabled, $file_path) {
+function jirafeau_handle_add_file_encryption($crypt_module_enabled, $file_path)
+{
     /* Crypt file if option is enabled. */
     $crypted = false;
     $crypt_key = '';
@@ -501,7 +502,6 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     $crypt_key = '';
     list($crypted, $crypt_key) = jirafeau_handle_add_file_encryption($crypt, $file['tmp_name']);
 
-    
     /* file information */
     $hash = jirafeau_hash_file($file_hash_method, $file['tmp_name']);
     $name = str_replace(NL, '', trim($file['name']));
@@ -513,12 +513,9 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     $p = s2p("$hash");
     if (file_exists(VAR_FILES . $p .  $hash)) {
         $rc = unlink($file['tmp_name']);
-    } elseif ((file_exists(VAR_FILES . $p) || @mkdir(VAR_FILES . $p, 0755, true))
-            && 
-            //move_uploaded_file($file['tmp_name'], VAR_FILES . $p . $hash)) 
-            $move_operation($file['tmp_name'], VAR_FILES . $p . $hash))
-            {
-            
+    } elseif (
+        (file_exists(VAR_FILES . $p) || @mkdir(VAR_FILES . $p, 0755, true)) &&
+        $move_operation($file['tmp_name'], VAR_FILES . $p . $hash)) {
         $rc = true;
     }
     if (!$rc) {
@@ -526,7 +523,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
                  'error' =>
                    array('has_error' => true,
                           'why' => t('INTERNAL_ERROR_DEL')),
-                 'link' =>'',
+                 'link' => '',
                  'delete_link' => ''));
     }
 
@@ -580,7 +577,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
                  'error' =>
                    array('has_error' => true,
                           'why' => t('Internal error during file creation. ')),
-                 'link' =>'',
+                 'link' => '',
                  'delete_link' => '');
     }
     return array( 'error' => $noerr,
@@ -589,8 +586,8 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
                   'crypt_key' => $crypt_key);
 }
 
-
-function jirafeau_admin_list_table ($name, $file_hash, $link_hash, $visitor_function = null) {
+function jirafeau_admin_list_table($name, $file_hash, $link_hash, $visitor_function = null)
+{
     echo '<fieldset><legend>';
     if (!empty($name)) {
         echo t('FILENAME') . ": " . jirafeau_escape($name);
@@ -615,10 +612,6 @@ function jirafeau_admin_list_table ($name, $file_hash, $link_hash, $visitor_func
     }
     echo '</table></fieldset>';
 }
-
-
-
-
 
 /**
  * Tells if a mime-type is viewable in a browser
@@ -748,8 +741,8 @@ function jirafeau_get_link($hash)
  */
 function jirafeau_admin_list($name, $file_hash, $link_hash)
 {
-    $function = function($name, $file_hash, $link_hash) {
-         /* Get all links files. */
+    $function = function ($name, $file_hash, $link_hash) {
+        /* Get all links files. */
         $stack = array(VAR_LINKS);
         while (($d = array_shift($stack)) && $d != null) {
             $dir = scandir($d);
@@ -785,8 +778,7 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     if (!$l['crypted'] && !$l['crypted_legacy']) {
                         echo'<a href="f.php?h='. jirafeau_escape($node) .'" title="' .
                         t('DL_PAGE') . '">' . jirafeau_escape($l['file_name']) . '</a>';
-                    }
-                    else {
+                    } else {
                         echo jirafeau_escape($l['file_name']);
                     }
 
@@ -829,8 +821,9 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                 }
             }
         }
-        };
-        jirafeau_admin_list_table($name, $file_hash, $link_hash, $function);
+    };
+
+    jirafeau_admin_list_table($name, $file_hash, $link_hash, $function);
 }
 
 /**
@@ -1341,7 +1334,7 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
     for ($i = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES; $i < $fs; $i += JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES) {
         $to_dec = fread($r, JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES);
         [$dec, $crypt_tag] = sodium_crypto_secretstream_xchacha20poly1305_pull($crypt_state, $to_dec);
-        
+
         if (fwrite($w, $dec) === false) {
             return false;
         }
@@ -1758,7 +1751,7 @@ function jirafeau_get_download_stats($hash)
     $filename = VAR_LINKS . s2p("$hash") . $hash . '_download';
 
     if (!file_exists($filename)) {
-        return array('count'=>0);
+        return array('count' => 0);
     }
 
     $c = file($filename);
@@ -1782,7 +1775,8 @@ function jirafeau_write_download_stats($hash, $ip)
     fclose($handle);
 }
 
-function jirafeau_create_upload_finished_box($preview = true) {
+function jirafeau_create_upload_finished_box($preview = true)
+{
     ?>
 
     <div id="upload_finished">
@@ -1798,8 +1792,8 @@ function jirafeau_create_upload_finished_box($preview = true) {
     </p>
     </div>
 
-    <?php if ($preview == true) {
-    ?>
+    <?php
+    if ($preview == true) { ?>
     <div id="upload_finished_preview">
     <p>
         <a id="preview_link" href=""><?php echo t('VIEW_LINK') ?></a>
@@ -1809,7 +1803,8 @@ function jirafeau_create_upload_finished_box($preview = true) {
     </p>
     </div>
     <?php
-} ?>
+    }
+    ?>
 
     <div id="upload_direct_download">
     <p>
@@ -1834,77 +1829,76 @@ function jirafeau_create_upload_finished_box($preview = true) {
     <p id="date"></p>
     </div>
 </div>
-<?php 
+<?php
 }
 
-function jirafeau_get_expiration_time_options() {
-    return 
-    array(
+function jirafeau_get_expiration_time_options()
+{
+    return array(
         array(
-          'value' => 'minute',
-          'label' => '1_MIN'
+            'value' => 'minute',
+            'label' => '1_MIN'
         ),
         array(
-          'value' => 'hour',
-          'label' => '1_H'
+            'value' => 'hour',
+            'label' => '1_H'
         ),
         array(
-          'value' => 'day',
-          'label' => '1_D'
+            'value' => 'day',
+            'label' => '1_D'
         ),
         array(
-          'value' => 'week',
-          'label' => '1_W'
+            'value' => 'week',
+            'label' => '1_W'
         ),
         array(
             'value' => 'fortnight',
             'label' => '2_W'
         ),
         array(
-          'value' => 'month',
-          'label' => '1_M'
+            'value' => 'month',
+            'label' => '1_M'
         ),
         array(
-          'value' => 'quarter',
-          'label' => '1_Q'
+            'value' => 'quarter',
+            'label' => '1_Q'
         ),
         array(
-          'value' => 'year',
-          'label' => '1_Y'
+            'value' => 'year',
+            'label' => '1_Y'
         ),
         array(
-          'value' => 'none',
-          'label' => 'NONE'
+            'value' => 'none',
+            'label' => 'NONE'
         )
-      );
+        );
 }
 
+/**
+ *
+ * creates the time selection field
+ * @param mixed $cfg
+ * @return void
+ */
+function jirafeau_create_selection_array($cfg)
+{
+    echo '<select name="time" id="select_time">';
 
+    $expirationTimeOptions = jirafeau_get_expiration_time_options();
 
- /**
-  * 
-  * creates the time selection field
-  * @param mixed $cfg 
-  * @return void 
-  */
-  function jirafeau_create_selection_array($cfg) {
-    echo 
-    '<select name="time" id="select_time">';
-        
-        
-        $expirationTimeOptions = jirafeau_get_expiration_time_options();
-
-        foreach ($expirationTimeOptions as $expirationTimeOption) {
-            $selected = ($expirationTimeOption['value'] === $cfg['availability_default'])? 'selected="selected"' : '';
-            if (true === $cfg['availabilities'][$expirationTimeOption['value']]) {
-                echo '<option value="' . $expirationTimeOption['value'] . '" ' .
-              $selected . '>' . t($expirationTimeOption['label']) . '</option>';
-            }
+    foreach ($expirationTimeOptions as $expirationTimeOption) {
+        $selected = ($expirationTimeOption['value'] === $cfg['availability_default']) ? 'selected="selected"' : '';
+        if (true === $cfg['availabilities'][$expirationTimeOption['value']]) {
+            echo '<option value="' . $expirationTimeOption['value'] . '" ' .
+            $selected . '>' . t($expirationTimeOption['label']) . '</option>';
         }
-        echo '</select>';
- }
+    }
 
- function jirafeau_datestr_to_int ($time_str) {
+    echo '</select>';
+}
+
+function jirafeau_datestr_to_int($time_str)
+{
     $time = time();
     switch ($time_str) {
         case 'minute':
@@ -1931,7 +1925,7 @@ function jirafeau_get_expiration_time_options() {
         case 'year':
             $time += JIRAFEAU_YEAR;
             break;
-       default:
+        default:
             $time = JIRAFEAU_INFINITY;
             break;
     }
@@ -1942,10 +1936,10 @@ function jirafeau_get_expiration_time_options() {
 
 
 /**
- * links or copy a local file 
+ * links or copy a local file
  * TODO: boolean in config for linking
- * @param string $filepath 
- * @param $one_time_download is the file a one time download ?
+ * @param string $filepath
+ * @param $one_time_download is the file a one time download?
  * @param $key if not empty, protect the file with this key
  * @param $time the time of validity of the file
  * @param $ip uploader's ip
@@ -1956,21 +1950,20 @@ function jirafeau_get_expiration_time_options() {
  *   'link' => the link name of the uploaded file
  *   'delete_link' => the link code to delete file
  */
-function jirafeau_copy_local_file($local_file_path, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method) {
-    
+function jirafeau_copy_local_file($local_file_path, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method)
+{
     if (!file_exists($local_file_path)) {
         return (array(
             'error' =>
               array('has_error' => true,
                      'why' => t('INTERNAL_ERROR_FILE_NOT_EXIST')),
-            'link' =>'',
+            'link' => '',
             'delete_link' => ''));
     }
-    if(
+    if (
         // sanity check if file can be opened
-        $file = fopen($local_file_path, "r")
-    )
-    {
+        $file = fopen($local_file_path, 'r')
+    ) {
         // close file pointer - it's not needed here
         fclose($file);
         $time_in_int = jirafeau_datestr_to_int($time);
@@ -1985,25 +1978,23 @@ function jirafeau_copy_local_file($local_file_path, $one_time_download, $key, $t
             $file_hash_method,
             false
         );
-    }
-    else {
+    } else {
         return (array(
             'error' =>
               array('has_error' => true,
                      'why' => t('INTERNAL_ERROR_FP_OPEN_LOCAL')),
-            'link' =>'',
+            'link' => '',
             'delete_link' => ''));
     }
-    
 }
 
 
-function jirafeau_create_file_array($file_path) {
-    return 
-    [
-       'type' => mime_content_type($file_path),
-       'tmp_name' => $file_path,
-       'name' => basename($file_path),
-       'size' => filesize($file_path),
+function jirafeau_create_file_array($file_path)
+{
+    return [
+        'type' => mime_content_type($file_path),
+        'tmp_name' => $file_path,
+        'name' => basename($file_path),
+        'size' => filesize($file_path),
     ];
 }

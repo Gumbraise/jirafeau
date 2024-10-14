@@ -19,7 +19,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
- function template_js_preview_link() {
+function template_js_preview_link()
+{
     ?>
     if (!!document.getElementById('preview_link'))
     {
@@ -44,8 +45,9 @@
         }
     } 
     <?php
- }
-function template_js_download_page() {
+}
+function template_js_download_page()
+{
     ?>
     // Download page
     var download_link_href = 'f.php?h=' + reference;
@@ -60,7 +62,8 @@ function template_js_download_page() {
     }
     <?php
 }
-function template_js_email_link() {
+function template_js_email_link()
+{
     ?>
     // Email link
     var b = encodeURIComponent("<?php echo t("DL"); ?> \"" + filename + "\":") + "%0D" + "%0A";
@@ -72,7 +75,8 @@ function template_js_email_link() {
     }
     <?php
 }
-function template_js_delete_link() {
+function template_js_delete_link()
+{
     ?>
     // Delete link
     var delete_link_href = 'f.php?h=' + reference + '&d=' + delete_code;
@@ -80,7 +84,8 @@ function template_js_delete_link() {
     document.getElementById('delete_link_text').innerHTML = web_root + delete_link_href;
     <?php
 }
- function template_js_direct_download() {
+function template_js_direct_download()
+{
     ?>
     // Direct download link
     var direct_download_link_href = 'f.php?h=' + reference + '&d=1';
@@ -91,8 +96,9 @@ function template_js_delete_link() {
     document.getElementById('direct_link').href = direct_download_link_href;
     document.getElementById('direct_link_text').innerHTML = web_root + direct_download_link_href;
     <?php
- }
- function template_js_date_function() {
+}
+function template_js_date_function()
+{
     ?>
     // Validity date
     if (isEmpty(date))
@@ -111,7 +117,7 @@ function template_js_delete_link() {
             document.getElementById('date').style.display = '';
     }
     <?php
- }
+}
 
 
 
