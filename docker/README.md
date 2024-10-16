@@ -4,7 +4,7 @@
 
 Jirafeau is a small PHP application so running it inside a docker container is pretty straightforward.
 
-```
+```shell
 docker pull registry.gitlab.com/jirafeau/jirafeau:latest
 docker run -it --rm -p 8080:80 registry.gitlab.com/jirafeau/jirafeau:latest
 ```
@@ -14,7 +14,7 @@ The admin console is located on `/admin.php`, check console output to get auto-g
 
 ## Build your own Jirafeau docker image
 
-```
+```shell
 git clone https://gitlab.com/jirafeau/Jirafeau.git
 cd Jirafeau
 docker build -t your/jirafeau:latest .
@@ -23,7 +23,8 @@ docker build -t your/jirafeau:latest .
 ## Security
 
 You may be interested in running Jirafeau on port 80:
-```
+
+```shell
 docker run -d -p 80:80 --sysctl net.ipv4.ip_unprivileged_port_start=80 registry.gitlab.com/jirafeau/jirafeau
 ```
 
@@ -63,7 +64,8 @@ Available options:
 - `DOWNLOAD_PASSWORD_POLICY_REGEX`: regex to check against if password policy is set to regex
 
 Example:
-```
+
+```shell
 docker run -it -p 8080:80 --rm -e ADMIN_PASSWORD='p4ssw0rd' -e WEB_ROOT='jirafeau.mydomain.com/' -e UPLOAD_PASSWORD='foo,bar' -e PREVIEW=0  registry.gitlab.com/jirafeau/jirafeau:latest
 ```
 
@@ -73,9 +75,18 @@ Files and links are stored in `/data` by default. Subfolders are automatically c
 Note that configuration is not stored in /data.
 
 Example of using a dedicated volume to store Jirafeau data separately from the container:
-```
+
+```shell
 docker volume create jirafeau_data
 docker run -it --rm -p 8080:80 --mount source=jirafeau_data,target=/data registry.gitlab.com/jirafeau/jirafeau:latest
+```
+
+It is also possible to put Jirafeau data into an already existing directory outside the container:
+
+```shell
+mkdir /tmp/jirafeau_data
+docker run -it --rm -p 8080:80 -v /tmp/jirafeau_data:/data registry.gitlab.com/jirafeau/jirafeau:latest
+
 ```
 
 ## Few notes
