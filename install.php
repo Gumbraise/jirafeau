@@ -153,7 +153,7 @@ break;
           'abcdefghijklmnopqrstuvwxyz' . '0123456789';
                 $len_alphanum = strlen($alphanum);
                 $var = 'var-';
-                for ($i = 0; $i <JIRAFEAU_VAR_RAND_LENGTH; $i++) {
+                for ($i = 0; $i < JIRAFEAU_VAR_RAND_LENGTH; $i++) {
                     $var .= substr($alphanum, mt_rand(0, $len_alphanum - 1), 1);
                 }
                 echo JIRAFEAU_ROOT . $var . '/';

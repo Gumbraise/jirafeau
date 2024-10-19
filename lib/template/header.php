@@ -6,7 +6,7 @@ header('x-ua-compatible: ie=edge');
 <html>
 <head>
   <meta charset="utf-8">
-  <title><?php echo (true === empty($cfg['title']))? t('JI_WEB_RE') : $cfg['title']; ?></title>
+  <title><?php echo (true === empty($cfg['title'])) ? t('JI_WEB_RE') : $cfg['title']; ?></title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link id="shortcut_icon" rel="shortcut icon" href="<?php echo 'media/' . $cfg['style'] . '/favicon.ico'; ?>">
   <link id="stylesheet" rel="stylesheet" href="<?php echo 'media/' . $cfg['style'] . '/style.css.php'; ?>" type="text/css" />
@@ -17,6 +17,6 @@ header('x-ua-compatible: ie=edge');
 <div id="content">
   <h1>
     <a href="./">
-      <?php echo (true === empty($cfg['title']))? t('JI_WEB_RE') : $cfg['title']; ?>
+      <?php echo (true === empty($cfg['title'])) ? t('JI_WEB_RE') : $cfg['title']; ?>
     </a>
   </h1>

@@ -130,7 +130,7 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
         <input type="file" id="file_select" size="30"
     onchange="control_selected_file_size(<?php echo $cfg['maximal_upload_size'] ?>, '<?php
             if ($cfg['maximal_upload_size'] >= 1024) {
-                echo t('2_BIG') . ', ' . t('FILE_LIM') . " " . number_format($cfg['maximal_upload_size']/1024, 2) . " GB.";
+                echo t('2_BIG') . ', ' . t('FILE_LIM') . " " . number_format($cfg['maximal_upload_size'] / 1024, 2) . " GB.";
             } elseif ($cfg['maximal_upload_size'] > 0) {
                 echo t('2_BIG') . ', ' . t('FILE_LIM') . " " . $cfg['maximal_upload_size'] . " MB.";
             }
@@ -143,26 +143,26 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
         if ($cfg['one_time_download']) {
             echo '<tr><td>' . t('ONE_TIME_DL') . ':</td>';
             echo '<td><input type="checkbox" id="one_time_download"';
-            
+
             if ($cfg['one_time_download_preselected']) {
                 echo ' checked';
             }
 
             echo ' /></td></tr>';
         }
-        if ($cfg['download_password_requirement'] === 'generated') {
-            echo '<input type="hidden" name="key" id="input_key" value="' . $download_pass .'"/>';
-        } else {
-            echo '<tr><td><label for="input_key">' . t('PSW') . ':' . '</label></td>';
-            echo '<td><input type="password" name="key" id="input_key" autocomplete = "new-password"';
-            if ($cfg['download_password_policy'] === 'regex') {
-                echo ' pattern="' . substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2) . '"'; //remove php delimiters
-            }
-            if ($cfg['download_password_requirement'] === 'required') {
-                echo ' required';
-            }
-            echo '/></td></tr>';
-        }?>
+if ($cfg['download_password_requirement'] === 'generated') {
+    echo '<input type="hidden" name="key" id="input_key" value="' . $download_pass .'"/>';
+} else {
+    echo '<tr><td><label for="input_key">' . t('PSW') . ':' . '</label></td>';
+    echo '<td><input type="password" name="key" id="input_key" autocomplete = "new-password"';
+    if ($cfg['download_password_policy'] === 'regex') {
+        echo ' pattern="' . substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2) . '"'; //remove php delimiters
+    }
+    if ($cfg['download_password_requirement'] === 'required') {
+        echo ' required';
+    }
+    echo '/></td></tr>';
+}?>
         <tr>
         <td><label for="select_time"><?php echo t('TIME_LIM') . ':'; ?></label></td>
         <td>
