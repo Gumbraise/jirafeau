@@ -170,6 +170,7 @@ function run_setup(&$cfg)
     env_2_cfg_string($cfg, 'availability_default');
     env_2_cfg_string($cfg, 'dark_style');
     env_2_cfg_bool($cfg, 'one_time_download');
+    env_2_cfg_bool($cfg, 'one_time_download_preselected');
     env_2_cfg_bool($cfg, 'enable_crypt');
     env_2_cfg_bool($cfg, 'debug');
     env_2_cfg_int($cfg, 'maximal_upload_size');
