@@ -2,7 +2,7 @@
 
 ## Run Jirafeau through a pre-made Docker image
 
-Jirafeau is a small PHP application so running it inside a docker container is pretty straightforward.
+Jirafeau is a small PHP application so running it inside a Docker container is pretty straightforward. Container images are built for AMD64 and ARM64 systems and can be downloaded from our registry at `registry.gitlab.com`.
 
 ```shell
 docker pull registry.gitlab.com/jirafeau/jirafeau:latest
@@ -49,6 +49,7 @@ Available options:
 - `DARK_STYLE`: apply a specific style for browsers in dark mode.
 - `AVAILABILITY_DEFAULT`: setup which availability shows by default.
 - `ONE_TIME_DOWNLOAD`: set to 1 or 0 to enable or disable one time downloads.
+- `ONE_TIME_DOWNLOAD_PRESELECTED`: set to 1 or 0 to preselect the checkbox for one time downloads.
 - `ENABLE_CRYPT`: set to 1 or 0 to enable or disable server side encryption.
 - `DEBUG`: set to 1 or 0 to enable or disable debug mode.
 - `MAXIMAL_UPLOAD_SIZE`: maximal file size allowed (expressed in MB).
@@ -86,7 +87,6 @@ It is also possible to put Jirafeau data into an already existing directory outs
 ```shell
 mkdir /tmp/jirafeau_data
 docker run -it --rm -p 8080:80 -v /tmp/jirafeau_data:/data registry.gitlab.com/jirafeau/jirafeau:latest
-
 ```
 
 ## Few notes
