@@ -1197,6 +1197,11 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
         return "Error: referenced file does not exist";
     }
 
+    /* Store filesize before encrypting the file */
+    /* Otherwise we would send the size of the encrypted file and the data of the unencrypted file */
+    /* This would break some browsers */
+    $size = filesize($p);
+
     $crypted = false;
     $crypt_key = '';
     if ($crypt == true && extension_loaded('sodium') == true) {
@@ -1209,7 +1214,6 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
     }
 
     $hash = jirafeau_hash_file($file_hash_method, $p);
-    $size = filesize($p);
     $np = s2p($hash);
     $delete_link_code = jirafeau_gen_random(5);
 
