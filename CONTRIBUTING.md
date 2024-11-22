@@ -54,11 +54,11 @@ view only to show the most important files and their role.
 
 ## Translations
 
-Translation may be added via [Jirafeau's Weblate](https://hosted.weblate.org/projects/jirafeau/master/).
+Translations may be added by creating a new JSON file under `locales` and submitting a merge request.
 
 ## Coding style
 
-- This project follows the [PSR-2](http://www.php-fig.org/psr/psr-2/) Coding Style
+- This project follows the [PSR-12](https://www.php-fig.org/psr/psr-12/) coding style
 - Files must be in UTF-8 without BOM and use Unix Line Endings (LF)
 
 ## Branches
@@ -90,7 +90,6 @@ Quick walkthrough:
 
 ## New Releases
 
-* Fetch weblate and rebase and import translations
 * If the release is not done for security purposes: create a new issue and freeze next-release branch for at least week.
 * Compare the [`next-release` branch to `master`](https://gitlab.com/jirafeau/Jirafeau/compare/master...next-release)
 * Add a list of noteworthy features and bugfixes to `CHANGELOG.md`

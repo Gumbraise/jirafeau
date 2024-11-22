@@ -106,7 +106,6 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - Vasilis Giann
 - Victor Lamoine
 - Viktar Vauchkevich
-- Weblate
 - Wim Livens
 - Yaron Shahrabani
 - YFdyh000
