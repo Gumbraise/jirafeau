@@ -89,6 +89,8 @@ mkdir /tmp/jirafeau_data
 docker run -it --rm -p 8080:80 -v /tmp/jirafeau_data:/data registry.gitlab.com/jirafeau/jirafeau:latest
 ```
 
+Please note that the files and directories created in the directory outside the container will probably be owned by UID 100.
+
 ## Few notes
 
 - `var-...` folder where lives all uploaded data is protected from direct access
