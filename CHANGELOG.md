@@ -16,6 +16,7 @@
 
 - Removed the download button and the corresponding link for encrypted files from the admin interface
 - Fixed an issue with sending the wrong filesize after decrypting an encrypted file
+- Fixed the possibility to bypass the check for CVE-2022-30110 (prevent preview of SVG images) by sending a manipulated HTTP request with a MIME type like "image/svg+XML".
 - We now provide Docker images for AMD64 and ARM64 systems
 - Lots of code refactoring and cleanup
 - Few more little fixes
