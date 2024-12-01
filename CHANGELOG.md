@@ -21,6 +21,7 @@
 - Lots of code refactoring and cleanup
 - Few more little fixes
 - Typo and spelling mistakes
+- Upgrade from 4.6.0: in-place upgrade
 
 New configuration items:
 - `one_time_download_preselected` for preselecting the checkbox for deleting the file after the first download
@@ -35,6 +36,7 @@ New configuration items:
 - Removed usage of deprecated `strftime()` function
 - Few more little fixes
 - Typo and spelling mistakes
+- Upgrade from 4.5.0: in-place upgrade
 
 New configuration items:
 - `download_password_requirement`, `download_password_gen_len`, `download_password_gen_chars`, `download_password_policy` and `download_password_policy_regex` for configuring file download passwords
