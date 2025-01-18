@@ -1,0 +1,12 @@
+services:
+  web:
+    build:
+      context: . # or ../Dockerfile if we put it in the ./docker folder
+    volumes:
+      - ./jirafeau_data:/data
+    environment:
+      - ADMIN_PASSWORD='p4ssw0rd'
+    
+    ports:
+      - 8080:80
+
