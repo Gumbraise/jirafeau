@@ -91,6 +91,28 @@ function env_2_cfg_string_array(&$cfg, $config_name)
     return true;
 }
 
+function env_2_cfg_string_array_key_value(&$cfg, $config_name)
+{
+    $env_name = strtoupper($config_name);
+    $env_string = getenv($env_name);
+    if ($env_string === false) {
+        return;
+    }
+    $result = json_decode($env_string, true);
+    if (json_last_error() === JSON_ERROR_NONE) {
+        // JSON is valid
+        $c = count($result);
+        echo ("setting $config_name array with $c value(s)n\n");
+    } else {
+        echo ("ERROR - invalid json for environment key $config_name \n");
+    } 
+    
+    $cfg[$config_name] = $result;
+    return true;
+}
+
+
+
 function setup_admin_password(&$cfg)
 {
     if (strlen($cfg['admin_password']) > 0) {
@@ -165,6 +187,7 @@ function run_setup(&$cfg)
     env_2_cfg_bool($cfg, 'preview');
     env_2_cfg_string($cfg, 'title', false);
     env_2_cfg_string($cfg, 'organisation');
+    env_2_cfg_string($cfg, 'lang');
     env_2_cfg_string($cfg, 'contactperson');
     env_2_cfg_string($cfg, 'style');
     env_2_cfg_string($cfg, 'availability_default');
@@ -179,6 +202,8 @@ function run_setup(&$cfg)
     env_2_cfg_string_array($cfg, 'admin_ip');
     env_2_cfg_string_array($cfg, 'upload_ip_nopassword');
     env_2_cfg_string_array($cfg, 'proxy_ip');
+    // this is a key value based value
+    env_2_cfg_string_array_key_value($cfg, 'availabilities');
     env_2_cfg_bool($cfg, 'store_uploader_ip');
     env_2_cfg_string($cfg, 'download_password_requirement');
     env_2_cfg_int($cfg, 'download_password_gen_len');
