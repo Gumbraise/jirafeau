@@ -102,16 +102,14 @@ function env_2_cfg_string_array_key_value(&$cfg, $config_name)
     if (json_last_error() === JSON_ERROR_NONE) {
         // JSON is valid
         $c = count($result);
-        echo ("setting $config_name array with $c value(s)n\n");
+        echo("setting $config_name array with $c value(s)n\n");
     } else {
-        echo ("ERROR - invalid json for environment key $config_name \n");
-    } 
-    
+        echo("ERROR - invalid json for environment key $config_name \n");
+    }
+
     $cfg[$config_name] = $result;
     return true;
 }
-
-
 
 function setup_admin_password(&$cfg)
 {
