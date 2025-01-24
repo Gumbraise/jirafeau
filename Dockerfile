@@ -1,5 +1,6 @@
 FROM php:8.1-fpm-alpine
 LABEL org.opencontainers.image.authors="jerome@jutteau.fr"
+ARG INI="php"
 
 # base install
 RUN apk update && \
@@ -11,7 +12,7 @@ RUN apk update && \
 COPY --chmod=550 docker/cleanup.sh docker/run.sh  /
 COPY --chmod=640 docker/docker_config.php /docker_config.php
 
-COPY docker/php.ini /usr/local/etc/php/php.ini
+COPY docker/${INI}.ini /usr/local/etc/php/php.ini
 COPY docker/lighttpd.conf /etc/lighttpd/lighttpd.conf
 
 # Install Jirafeau
