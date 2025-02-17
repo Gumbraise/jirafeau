@@ -446,7 +446,7 @@ function jirafeau_upload($file, $one_time_download, $key, $time, $ip, $crypt, $l
                  'link' => '',
                  'delete_link' => ''));
     }
-    jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method);
+    return jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method);
 }
 
 /**
