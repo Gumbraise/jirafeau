@@ -24,6 +24,12 @@ docker build -t your/jirafeau:latest .
 
 You can use the `docker-compose.yaml` from [here](../docker-compose.yaml)
 
+### Run Container
+
+```sh
+docker compose up -d
+```
+
 ### Custom Theme
 
 1. copy the theme data from the running container
