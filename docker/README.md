@@ -20,6 +20,41 @@ cd Jirafeau
 docker build -t your/jirafeau:latest .
 ```
 
+## Docker Compose
+
+You can use the `docker-compose.yaml` from [here](../docker-compose.yaml)
+
+### Custom Theme
+
+1. copy the theme data from the running container
+
+    ```sh
+    docker compose cp web:/www/media jirafeau_media
+    ```
+
+2. mount the theme data
+
+    ```yaml
+    #....
+    volumes:
+        - ./jirafeau_media/your_theme:/www/media/your_theme
+    ```
+
+3. set the environment variable
+
+    ```yaml
+    # ....
+    environment:
+    STYLE: 'your_theme'
+    DARK_STYLE: 'your_theme'
+    ```
+
+4. run the compose file
+
+    ```sh
+    docker compose up -d
+    ```
+
 ## Security
 
 You may be interested in running Jirafeau on port 80:
@@ -36,6 +71,7 @@ Jirafeau's docker image accepts some options through environment variables to ea
 More details about options in `lib/config.original.php`.
 
 Available options:
+
 - `ADMIN_PASSWORD`: setup a specific admin password. If not set, a random password will be generated.
 - `ADMIN_IP`: set one or more ip allowed to access admin interface (separated by comma).
 - `LANG`: choose the language for jirafeau (default auto).
