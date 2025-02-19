@@ -21,7 +21,7 @@ RUN --mount=type=bind,source=.,target=/mnt \
     cp -r /mnt/* /www/ && \
     rm -rf /www/docker && \
     touch /www/lib/config.local.php && \
-    chown -R $(id -u lighttpd).$(id -g www-data) /www && \
+    chown -R $(id -u lighttpd):$(id -g www-data) /www && \
     chmod 770 /www
 
 CMD ["/run.sh"]
