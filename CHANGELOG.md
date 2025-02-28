@@ -12,15 +12,19 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
-## Version 4.6.x (not yet released)
+## Version 4.6.2 (not yet released)
 
-- ...
+- Allow to configure the language and the availabilities for files for a Docker container (issue [#20](https://gitlab.com/jirafeau/Jirafeau/-/issues/20))
+- Added an example `docker-compose.yaml` file for configuring the Docker container
+- Fixed an error occuring on some systems while building the Docker image (issue [#24](https://gitlab.com/jirafeau/Jirafeau/-/issues/24))
+- Script upload was broken due to a missing `return` statement (issue [#23](https://gitlab.com/jirafeau/Jirafeau/-/issues/23))
+- Upgrade from 4.6.1: in-place upgrade
 
 ## Version 4.6.1
 
 - Removed the download button and the corresponding link for encrypted files from the admin interface
 - Fixed an issue with sending the wrong filesize after decrypting an encrypted file
-- Fixed the possibility to bypass the check for CVE-2022-30110 (prevent preview of SVG images) by sending a manipulated HTTP request with a MIME type like "image/svg+XML".
+- Fixed the possibility to bypass the check for [CVE-2022-30110](https://www.cve.org/CVERecord?id=CVE-2022-30110) (prevent preview of SVG images) by sending a manipulated HTTP request with a MIME type like "image/svg+XML". This issue has subsequently been reported as [CVE-2024-12326](https://www.cve.org/CVERecord?id=CVE-2024-12326).
 - We now provide Docker images for AMD64 and ARM64 systems
 - Lots of code refactoring and cleanup
 - Few more little fixes
