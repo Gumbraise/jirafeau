@@ -1,12 +1,31 @@
 services:
   web:
     build:
+      no_cache: true
+      #args:
+        # INI: php_debug #change the ini
       context: . # or ../Dockerfile if we put it in the ./docker folder
     volumes:
       - ./jirafeau_data:/data
     environment:
-      - ADMIN_PASSWORD='p4ssw0rd'
-    
+      ADMIN_PASSWORD: p4ssw0rd
+      #LANG: en
+      #WEB_ROOT: 'my.domain.de'
+      #STYLE: 'my_jirafeau_theme'
+      #DARK_STYLE: 'my_jirafeau_theme'
+      AVAILABILITIES: |
+        {
+          "minute": true,
+          "hour": true,
+          "day": true,
+          "week": true,
+          "fortnight": true,
+          "month": true,
+          "quarter": false,
+          "year": false,
+          "none": false
+        }
     ports:
       - 8080:80
+
 
