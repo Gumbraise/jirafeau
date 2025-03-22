@@ -320,7 +320,7 @@ downloadpage='f.php'
 
 if [ "$1" == "send" ]; then
     if [ ! -f "$2" ]; then
-        echo "File \"$2\" does not exists."
+        echo "File \"$2\" does not exist."
         exit
     fi
 
