@@ -171,7 +171,7 @@ if (!empty($link['key'])) {
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
         exit;
     } else {
-        if ($link['key'] == md5($_POST['key'])) {
+        if (hash_equals($link['key'], md5($_POST['key']))) {
             $password_challenged = true;
         } else {
             sleep(2);
