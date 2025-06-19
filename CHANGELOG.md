@@ -12,9 +12,11 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
-## Version 4.6.x (not yet released)
+## Version 4.6.3 (not yet released)
 
-- ...
+- Fixed the possibility to bypass the checks for [CVE-2022-30110](https://www.cve.org/CVERecord?id=CVE-2022-30110) and [CVE-2024-12326](https://www.cve.org/CVERecord?id=CVE-2024-12326) (prevent preview of SVG images and other critical files) by sending a manipulated HTTP request with a MIME type like "image/png,text/html". When doing the preview, the MIME type "text/html" takes precedence and you can execute for example JavaScript code.
+- Compare password hashes using `hash_equals()`
+- Upgrade from 4.6.2: in-place upgrade
 
 ## Version 4.6.2
 
