@@ -73,7 +73,7 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
         }
         /* Test web password authentication. */
         elseif (!empty($cfg['admin_password']) && isset($_POST['admin_password'])) {
-            if ($cfg['admin_password'] === hash('sha256', $_POST['admin_password'])) {
+            if (hash_equals($cfg['admin_password'], hash('sha256', $_POST['admin_password']))) {
                 jirafeau_admin_session_start();
             } else {
                 require(JIRAFEAU_ROOT . 'lib/template/header.php');
