@@ -18,7 +18,7 @@
 
 ## Version 4.6.3
 
-- Fixed the possibility to bypass the checks for [CVE-2022-30110](https://www.cve.org/CVERecord?id=CVE-2022-30110) and [CVE-2024-12326](https://www.cve.org/CVERecord?id=CVE-2024-12326) (prevent preview of SVG images and other critical files) by sending a manipulated HTTP request with a MIME type like "image/png,text/html". When doing the preview, the MIME type "text/html" takes precedence and you can execute for example JavaScript code.
+- Fixed the possibility to bypass the checks for [CVE-2022-30110](https://www.cve.org/CVERecord?id=CVE-2022-30110) and [CVE-2024-12326](https://www.cve.org/CVERecord?id=CVE-2024-12326) (prevent preview of SVG images and other critical files) by sending a manipulated HTTP request with a MIME type like "image/png,text/html". When doing the preview, the MIME type "text/html" takes precedence and you can execute for example JavaScript code. This issue has subsequently been reported as [CVE-2025-7066](https://www.cve.org/CVERecord?id=CVE-2025-7066).
 - Compare password hashes using `hash_equals()`
 - Upgrade from 4.6.2: in-place upgrade
 
