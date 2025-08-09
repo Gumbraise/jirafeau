@@ -771,6 +771,9 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     if (!empty($link_hash) && $link_hash != $node) {
                         continue;
                     }
+
+                    /* Get download statistics */
+                    $ld = jirafeau_get_download_stats($node);
                     /* Print link information. */
                     echo '<tr>';
                     echo '<td><strong>';
@@ -792,6 +795,11 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     echo t('UPLOAD_DATE') . ': ' . jirafeau_get_datetimefield($l['upload_date']) . '<br/>';
                     if (strlen($l['ip']) > 0) {
                         echo t('ORIGIN') . ': ' . $l['ip'] . '<br/>';
+                    }
+                    echo t('DOWNLOAD_COUNT') . ': ' . $ld['count'] . '<br/>';
+                    if ($ld['count'] > 0) {
+                        echo t('DOWNLOAD_DATE') . ': ' . jirafeau_get_datetimefield($ld['date']) . '<br/>';
+                        echo t('DOWNLOAD_IP') . ': ' . $ld['ip'] . '<br/>';
                     }
                     echo '</td><td>';
 
