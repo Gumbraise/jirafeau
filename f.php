@@ -98,7 +98,7 @@ if (!empty($delete_code) && $delete_code == $link['link_code']) {
              <tr><td>
              <?php echo t('GONNA_DEL') . ' "' . jirafeau_escape($link['file_name']) . '" (' . jirafeau_human_size($link['file_size']) . ').' ?>
              </td></tr>
-             <tr><td>
+             <tr class="tos"><td>
                 <?php echo t('USING_SERVICE'). ' <a href="tos.php" target="_blank" rel="noopener noreferrer">' . t('TOS') . '</a>.' ?>
              </td></tr>
              <tr><td>
@@ -143,7 +143,7 @@ if (!empty($link['key'])) {
              t('GIMME_PSW') . ' : ' .
              '<input type = "password" name = "key" autocomplete = "current-password"/>' .
              '</td></tr>' .
-             '<tr><td>' .
+             '<tr class="tos"><td>' .
              t('USING_SERVICE'). ' <a href="tos.php" target="_blank" rel="noopener noreferrer">' . t('TOS') . '</a>.' .
              '</td></tr>';
 
@@ -193,7 +193,7 @@ if (!$password_challenged && !$do_download && !$do_preview) {
              '<tr><td>' .
              t('NOW_DOWNLOADING') . ' "' . jirafeau_escape($link['file_name']) . '" (' . jirafeau_human_size($link['file_size']) . ').' .
              '</td></tr>' .
-             '<tr><td>' .
+             '<tr class="tos"><td>' .
              t('USING_SERVICE'). ' <a href="tos.php" target="_blank" rel="noopener noreferrer">' . t('TOS') . '</a>.' .
              '</td></tr>';
 
