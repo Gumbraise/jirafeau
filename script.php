@@ -74,7 +74,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
             !jirafeau_challenge_upload($cfg, get_ip_address($cfg), $_POST['upload_password'])) {
             echo 'Error 3: Invalid password';
             exit;
-        } elseif (!jirafeau_challenge_upload($cfg, get_ip_address($cfg), null)) {
+        } elseif (!isset($_POST['upload_password']) && !jirafeau_challenge_upload($cfg, get_ip_address($cfg), null)) {
             echo 'Error 2: No password nor allowed IP';
             exit;
         }
