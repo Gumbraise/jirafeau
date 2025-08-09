@@ -1779,7 +1779,7 @@ function jirafeau_write_download_stats($hash, $ip)
     fclose($handle);
 }
 
-function jirafeau_create_upload_finished_box($preview = true)
+function jirafeau_create_upload_finished_box($preview = true, $download_pass = null)
 {
     ?>
 
@@ -1795,6 +1795,22 @@ function jirafeau_create_upload_finished_box($preview = true)
         <button id="upload_link_button">&#128203;</button>
     </p>
     </div>
+
+    <?php if (!is_null($download_pass)) {
+    ?>
+    <div id="show_password">
+    <p><?php echo t('PSW') ?></p>
+
+    <div id="download_password">
+    <p>
+        <?php echo '<input id="output_key" value="' . $download_pass . '" readonly/>'?>
+        <button id="password_copy_button">&#128203;</button>
+    </p>
+    </div>
+    </div>
+    <?php
+    }?>
+
 
     <?php
     if ($preview == true) { ?>
