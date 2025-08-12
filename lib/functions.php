@@ -1804,8 +1804,7 @@ function jirafeau_create_upload_finished_box($preview = true, $download_pass = n
     </p>
     </div>
 
-    <?php if (!is_null($download_pass)) {
-    ?>
+    <?php if (!is_null($download_pass)) { ?>
     <div id="show_password">
     <p><?php echo t('PSW') ?></p>
 
