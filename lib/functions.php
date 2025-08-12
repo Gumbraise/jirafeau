@@ -771,6 +771,9 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     if (!empty($link_hash) && $link_hash != $node) {
                         continue;
                     }
+
+                    /* Get download statistics */
+                    $ld = jirafeau_get_download_stats($node);
                     /* Print link information. */
                     echo '<tr>';
                     echo '<td><strong>';
@@ -792,6 +795,11 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     echo t('UPLOAD_DATE') . ': ' . jirafeau_get_datetimefield($l['upload_date']) . '<br/>';
                     if (strlen($l['ip']) > 0) {
                         echo t('ORIGIN') . ': ' . $l['ip'] . '<br/>';
+                    }
+                    echo t('DOWNLOAD_COUNT') . ': ' . $ld['count'] . '<br/>';
+                    if ($ld['count'] > 0) {
+                        echo t('DOWNLOAD_DATE') . ': ' . jirafeau_get_datetimefield($ld['date']) . '<br/>';
+                        echo t('DOWNLOAD_IP') . ': ' . $ld['ip'] . '<br/>';
                     }
                     echo '</td><td>';
 
@@ -1779,7 +1787,7 @@ function jirafeau_write_download_stats($hash, $ip)
     fclose($handle);
 }
 
-function jirafeau_create_upload_finished_box($preview = true)
+function jirafeau_create_upload_finished_box($preview = true, $download_pass = null)
 {
     ?>
 
@@ -1795,6 +1803,22 @@ function jirafeau_create_upload_finished_box($preview = true)
         <button id="upload_link_button">&#128203;</button>
     </p>
     </div>
+
+    <?php if (!is_null($download_pass)) {
+    ?>
+    <div id="show_password">
+    <p><?php echo t('PSW') ?></p>
+
+    <div id="download_password">
+    <p>
+        <?php echo '<input id="output_key" value="' . $download_pass . '" readonly/>'?>
+        <button id="password_copy_button">&#128203;</button>
+    </p>
+    </div>
+    </div>
+    <?php
+    }?>
+
 
     <?php
     if ($preview == true) { ?>

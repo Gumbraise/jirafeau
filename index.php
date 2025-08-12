@@ -25,7 +25,9 @@ require(JIRAFEAU_ROOT . 'lib/settings.php');
 require(JIRAFEAU_ROOT . 'lib/functions.php');
 require(JIRAFEAU_ROOT . 'lib/lang.php');
 
-if ($cfg['download_password_requirement'] === "generated") {
+$download_pass = null;
+
+if ($cfg['download_password_requirement'] === 'generated') {
     $download_pass = jirafeau_gen_download_pass($cfg['download_password_gen_len'], $cfg['download_password_gen_chars']);
 }
 
@@ -102,7 +104,7 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
 
 ?>
 
-<?php jirafeau_create_upload_finished_box($cfg['preview']); ?>
+<?php jirafeau_create_upload_finished_box($cfg['preview'], $download_pass); ?>
 
 <div id="uploading">
     <p>
