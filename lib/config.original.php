@@ -34,6 +34,13 @@ $cfg['web_root'] = '';
  */
 $cfg['var_root'] = '';
 
+/* Activating 'use_shortlinks' will allow you to use shortened download links
+ * This requires a web server that supports URL rewriting, like Apache with mod_rewrite.
+ * If you are using Apache, copy the provided '.htaccess.sample' file  in the root directory of
+ * Jirafeau and store it as '.htaccess'. For other web servers, manual configuration is required.
+ */
+$cfg['use_shortlinks'] = false;
+
 /* Language - choose between 'auto' or any language located in the /lib/locales/ folder.
  * The mode »auto« will cause the script to detect the user's browser information
  * and offer a matching language, or use »en« if it is not available.
