@@ -25,7 +25,9 @@ function template_js_preview_link()
     if (!!document.getElementById('preview_link'))
     {
         document.getElementById('upload_finished_preview').style.display = 'none';
-        var preview_link_href = 'f.php?h=' + reference + '&p=1';
+        var preview_link_href = use_shortlinks ? '' : 'f.php?h=';
+        preview_link_href += reference;
+        preview_link_href += use_shortlinks ? '?p=1' : '&p=1';
         if (crypt_key.length > 0)
         {
             preview_link_href += '&k=' + crypt_key;
@@ -50,10 +52,12 @@ function template_js_download_page()
 {
     ?>
     // Download page
-    var download_link_href = 'f.php?h=' + reference;
+    var download_link_href = use_shortlinks ? '' : 'f.php?h=';
+    download_link_href += reference;
     if (crypt_key.length > 0)
     {
-        download_link_href += '&k=' + crypt_key;
+        download_link_href += use_shortlinks ? '?k=' : '&k='
+        download_link_href += crypt_key;
     }
     if (!!document.getElementById('upload_finished_download_page'))
     {
@@ -79,7 +83,10 @@ function template_js_delete_link()
 {
     ?>
     // Delete link
-    var delete_link_href = 'f.php?h=' + reference + '&d=' + delete_code;
+    var delete_link_href = use_shortlinks ? '' : 'f.php?h=';
+    delete_link_href += reference;
+    delete_link_href += use_shortlinks ? '?d=' : '&d=';
+    delete_link_href += delete_code;
     document.getElementById('delete_link').href = delete_link_href;
     document.getElementById('delete_link_text').innerHTML = web_root + delete_link_href;
     <?php
@@ -88,7 +95,10 @@ function template_js_direct_download()
 {
     ?>
     // Direct download link
-    var direct_download_link_href = 'f.php?h=' + reference + '&d=1';
+    //var direct_download_link_href = 'f.php?h=' + reference + '&d=1';
+    var direct_download_link_href = use_shortlinks ? '' : 'f.php?h=';
+    direct_download_link_href += reference;
+    direct_download_link_href += use_shortlinks ? '?d=1' : '&d=1';
     if (crypt_key.length > 0)
     {
         direct_download_link_href += '&k=' + crypt_key;
@@ -132,6 +142,7 @@ require(JIRAFEAU_ROOT . 'lib/lang.php');
 ?>
 // @license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3-or-Later
 var web_root = "<?php echo $cfg['web_root']; ?>";
+var use_shortlinks = <?php echo ($cfg['use_shortlinks'] === true) ? 'true' : 'false'; ?>;
 
 var lang_array = <?php echo json_lang_generator(null); ?>;
 var lang_array_fallback = <?php echo json_lang_generator("en"); ?>;

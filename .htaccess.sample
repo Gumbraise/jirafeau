@@ -1,0 +1,7 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Match URLs with an 8-character alphanumeric ID
+    RewriteRule ^([a-zA-Z0-9_-]{8})$ f.php?h=$1 [L,QSA]
+</IfModule>
+
