@@ -14,7 +14,16 @@
 
 ## Version 4.6.x (not yet released)
 
+- Shortlinks...
+- Added CSS class `tos` to the link to the "Terms of Service" page
+- Download stats introduced in version 4.6.0 were accidentally removed in version 4.6.1. This feature is now available again.
+- Generated download passwords were not shown after the upload was completed
+- Uploading a file using `script.php` with an upload password set always ended up in an "Error 2". This is fixed now.
 - ...
+- Upgrade from 4.6.2: in-place upgrade
+
+New configuration items:
+- `use_shortlinks` for enabling shortlinks
 
 ## Version 4.6.3
 
