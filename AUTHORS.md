@@ -38,6 +38,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - fm-sys
 - François Boulogne
 - François L
+- Georges Taupin
 - GoZ
 - Guilherme Andrade
 - gwunderlich
@@ -58,6 +59,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - Julien Malik
 - KajmaczeK
 - Kidhoma Norman
+- Killian Chevrier
 - Lari Oesch
 - Laurentiu Dobrota
 - Luna Jernberg
@@ -85,6 +87,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - Poorchop
 - Pyry
 - Pyry Kujala
+- Ruixey
 - R.W
 - Sabri Ünal
 - sam lt
@@ -107,6 +110,8 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - Victor Lamoine
 - Viktar Vauchkevich
 - Wim Livens
+- Yann Cam
+- Yannis Aribaud
 - Yaron Shahrabani
 - YFdyh000
 - Your Name
