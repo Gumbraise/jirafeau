@@ -12,15 +12,15 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
-## Version 4.6.x (not yet released)
+## Version 4.7.0 (not yet released)
 
-- Shortlinks...
-- Added CSS class `tos` to the link to the "Terms of Service" page
+- Added feature for using shortened download links. This requires a web server that supports URL rewriting, like Apache with `mod_rewrite`.
+- Added CSS class `tos` for addressing the link to the "Terms of Service" page
 - Download stats introduced in version 4.6.0 were accidentally removed in version 4.6.1. This feature is now available again.
 - Generated download passwords were not shown after the upload was completed
 - Uploading a file using `script.php` with an upload password set always ended up in an "Error 2". This is fixed now.
 - ...
-- Upgrade from 4.6.2: in-place upgrade
+- Upgrade from 4.6.3: in-place upgrade
 
 New configuration items:
 - `use_shortlinks` for enabling shortlinks
