@@ -152,6 +152,10 @@ By activating this feature, you have to be aware of few things:
 
 In a next step, encryption will be made by the client (in JavaScript).
 
+## Known issues
+
+- There is an [issue](https://gitlab.com/jirafeau/Jirafeau/-/issues/40) with asynchronous uploads not working in Chromium-based browsers on servers with HTTP/3 enabled. This seems to be a bug in Chromium. Thanks to [slt](https://gitlab.com/sltrash) for [reporting](https://issues.chromium.org/issues/457463688) this to the Chromium developers.
+
 ## License
 
 GNU Affero General Public License v3 (AGPL-3.0).
