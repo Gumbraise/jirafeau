@@ -231,6 +231,7 @@ if (!jirafeau_is_viewable($link['mime_type']) || !$cfg['preview'] || $do_downloa
     header('Content-Disposition: attachment; filename="' . $link['file_name'] . '"');
 } else {
     header('Content-Disposition: filename="' . $link['file_name'] . '"');
+    header('X-Content-Type-Options: nosniff');
 }
 header('Content-Type: ' . $link['mime_type']);
 if ($cfg['file_hash'] == "md5") {
