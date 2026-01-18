@@ -154,7 +154,9 @@ In a next step, encryption will be made by the client (in JavaScript).
 
 ## Known issues
 
-- There is an [issue](https://gitlab.com/jirafeau/Jirafeau/-/issues/40) with asynchronous uploads not working in Chromium-based browsers on servers with HTTP/3 enabled. This seems to be a bug in Chromium. Thanks to [slt](https://gitlab.com/sltrash) for [reporting](https://issues.chromium.org/issues/457463688) this to the Chromium developers.
+- There is an [issue](https://gitlab.com/jirafeau/Jirafeau/-/issues/40) with asynchronous uploads not working in Chromium-based browsers on servers with HTTP/3 enabled. This seems to be caused by a [bug in Chromium](https://issues.chromium.org/issues/457463688).  
+This bug can be worked around by setting `max_upload_chunk_size_bytes` to a value of around 3000000 to 5000000 (3 to 5MB) which is default since Jirafeau version 4.7.1.  
+Thanks to [slt](https://gitlab.com/sltrash) for reporting this and for finding a workaround.
 
 ## License
 
