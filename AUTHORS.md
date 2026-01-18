@@ -95,6 +95,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - scumjr
 - Sebastien Mennetrier
 - Slobodan Simić
+- slt
 - Spanti Nicola (RyDroid)
 - Srikanth L
 - ssantos
