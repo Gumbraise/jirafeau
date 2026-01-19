@@ -16,6 +16,7 @@
 
 - Fixed another possibility to bypass the checks for [CVE-2022-30110](https://www.cve.org/CVERecord?id=CVE-2022-30110), [CVE-2024-12326](https://www.cve.org/CVERecord?id=CVE-2024-12326) and [CVE-2025-7066](https://www.cve.org/CVERecord?id=CVE-2025-7066) (prevent preview of SVG images and other critical files) by sending a manipulated HTTP request with a MIME type like "image". When doing the preview, the browser tries to automatically detect the MIME type resulting in detecting SVG and possibly executing JavaScript code. To prevent this, MIME sniffing is disabled.
 - The default value of `max_upload_chunk_size_bytes` was set to `5000000`. Higher values could trigger a bug Chromium-based browsers on servers with HTTP/3 enabled, causing asynchronous uploads to fail.
+- Docker image: Updated PHP to 8.3 and removed `mime-types.conf` from `lighttpd.conf`
 - Upgrade from 4.7.0: in-place upgrade, you also should set `max_upload_chunk_size_bytes` to `5000000` in your `config.local.php`!
 
 ## Version 4.7.0
