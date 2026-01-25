@@ -143,19 +143,21 @@ Encryption is configured to use [XChaCha20-Poly1305](https://en.wikipedia.org/wi
 In case of security troubles on the server, attacker won't be able to access files.
 
 By activating this feature, you have to be aware of few things:
--  Data encryption has a cost (CPU) and it takes more time for downloads to complete once file sent.
--  During the download, the server will decrypt on the fly (and use resource).
--  This feature needs to have the [`Sodium`](https://www.php.net/manual/en/book.sodium.php) PHP module.
--  File de-duplication will stop to work (as we can't compare two encrypted files).
--  Be sure your server does not log client's requests.
--  Don't forget to enable HTTPS.
 
-In a next step, encryption will be made by the client (in JavaScript).
+- This is **no** [end-to-end encryption](https://en.wikipedia.org/wiki/End-to-end_encryption)! Although the file should be sent to server using HTTPS, the file is unencrypted on the server for a very short time. To have end-to-end encryption, you need to encrypt the file yourself.
+- Data encryption has a cost (CPU) and it takes more time for downloads to complete once file sent.
+- During the download, the server will decrypt on the fly (and use resource).
+- This feature needs to have the [`Sodium`](https://www.php.net/manual/en/book.sodium.php) PHP module.
+- File de-duplication will stop to work (as we can't compare two encrypted files).
+- Be sure your server does not log client's requests.
+- Don't forget to enable HTTPS.
+
+In a next step, encryption will be made by the client (in JavaScript), which will also give us end-to-end encryption.
 
 ## Known issues
 
 - There is an [issue](https://gitlab.com/jirafeau/Jirafeau/-/issues/40) with asynchronous uploads not working in Chromium-based browsers on servers with HTTP/3 enabled. This seems to be caused by a [bug in Chromium](https://issues.chromium.org/issues/457463688).  
-This bug can be worked around by setting `max_upload_chunk_size_bytes` to a value of around 3000000 to 5000000 (3 to 5MB) which is default since Jirafeau version 4.7.1.  
+This bug can be worked around by setting `max_upload_chunk_size_bytes` to a value of around 3000000 to 5000000 (3 to 5MB) which is default since Jirafeau version 4.7.1. Please note that you have to change this value manually if you're upgrading from a version of Jirafeau older than 4.7.1!  
 Thanks to [slt](https://gitlab.com/sltrash) for reporting this and for finding a workaround.
 
 ## License
