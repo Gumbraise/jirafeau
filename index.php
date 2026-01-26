@@ -145,26 +145,30 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
         if ($cfg['one_time_download']) {
             echo '<tr><td>' . t('ONE_TIME_DL') . ':</td>';
             echo '<td><input type="checkbox" id="one_time_download"';
-
             if ($cfg['one_time_download_preselected']) {
                 echo ' checked';
             }
-
             echo ' /></td></tr>';
         }
-if ($cfg['download_password_requirement'] === 'generated') {
-    echo '<input type="hidden" name="key" id="input_key" value="' . $download_pass .'"/>';
-} else {
-    echo '<tr><td><label for="input_key">' . t('PSW') . ':' . '</label></td>';
-    echo '<td><input type="password" name="key" id="input_key" autocomplete = "new-password"';
-    if ($cfg['download_password_policy'] === 'regex') {
-        echo ' pattern="' . substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2) . '"'; //remove php delimiters
-    }
-    if ($cfg['download_password_requirement'] === 'required') {
-        echo ' required';
-    }
-    echo '/></td></tr>';
-}?>
+        if ($cfg['download_password_requirement'] === 'generated') {
+            echo '<input type="hidden" name="key" id="input_key" value="' . $download_pass .'"/>';
+        } else {
+            echo '<tr><td><label for="input_key">' . t('PSW') . ':' . '</label></td>';
+            echo '<td>';
+            // Password input inline
+            echo '<input type="password" name="key" id="input_key" autocomplete="new-password"';
+            if ($cfg['download_password_policy'] === 'regex') {
+                echo ' pattern="' . substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2) . '"';
+            }
+            if ($cfg['download_password_requirement'] === 'required') {
+                echo ' required';
+            }
+            echo ' />'; // close password input
+            // Show password checkbox inline
+            echo ' <input type="checkbox" id="show_password"> <label for="show_password">Show password</label>';
+            echo '</td></tr>';
+        }
+        ?>
         <tr>
         <td><label for="select_time"><?php echo t('TIME_LIM') . ':'; ?></label></td>
         <td>
@@ -173,16 +177,16 @@ if ($cfg['download_password_requirement'] === 'generated') {
         </tr>
 
         <?php
-if ($cfg['maximal_upload_size'] >= 1024) {
-    echo '<p class="config">' . t('FILE_LIM');
-    echo " " . number_format($cfg['maximal_upload_size'] / 1024, 2) . " GB.</p>";
-} elseif ($cfg['maximal_upload_size'] > 0) {
-    echo '<p class="config">' . t('FILE_LIM');
-    echo " " . $cfg['maximal_upload_size'] . " MB.</p>";
-} else {
-    echo '<p class="config"></p>';
-}
-?>
+        if ($cfg['maximal_upload_size'] >= 1024) {
+            echo '<p class="config">' . t('FILE_LIM');
+            echo " " . number_format($cfg['maximal_upload_size'] / 1024, 2) . " GB.</p>";
+        } elseif ($cfg['maximal_upload_size'] > 0) {
+            echo '<p class="config">' . t('FILE_LIM');
+            echo " " . $cfg['maximal_upload_size'] . " MB.</p>";
+        } else {
+            echo '<p class="config"></p>';
+        }
+        ?>
 
         <p id="max_file_size" class="config"></p>
     <p>
@@ -191,39 +195,46 @@ if ($cfg['maximal_upload_size'] >= 1024) {
         </table>
     </div> </fieldset></form>
 
-    <?php
-    if (jirafeau_user_session_logged() && $_SESSION['user_auth_type'] == JIRAFEAU_USER_AUTH_BY_PASSWORD) {
-        ?>
-    <form method="post" class="form logout">
-        <input type = "hidden" name = "action" value = "logout"/>
-        <input type = "submit" value = "<?php echo t('LOGOUT'); ?>" />
-    </form>
-    <?php
-    }
+<?php
+if (jirafeau_user_session_logged() && $_SESSION['user_auth_type'] == JIRAFEAU_USER_AUTH_BY_PASSWORD) {
+    ?>
+<form method="post" class="form logout">
+    <input type = "hidden" name = "action" value = "logout"/>
+    <input type = "submit" value = "<?php echo t('LOGOUT'); ?>" />
+</form>
+<?php
+}
 ?>
 
 </div>
 
 <script type="text/javascript" lang="Javascript">
 // @license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3-or-Later
-    document.getElementById('error_pop').style.display = 'none';
-    document.getElementById('uploading').style.display = 'none';
-    document.getElementById('upload_finished').style.display = 'none';
-    document.getElementById('options').style.display = 'none';
-    document.getElementById('send').style.display = 'none';
-    if (!check_html5_file_api ())
-        document.getElementById('max_file_size').innerHTML = '<?php
+document.getElementById('error_pop').style.display = 'none';
+document.getElementById('uploading').style.display = 'none';
+document.getElementById('upload_finished').style.display = 'none';
+document.getElementById('options').style.display = 'none';
+document.getElementById('send').style.display = 'none';
+if (!check_html5_file_api())
+    document.getElementById('max_file_size').innerHTML = '<?php
         $max_size = jirafeau_get_max_upload_size();
-if ($max_size > 0) {
-    echo t('NO_BROWSER_SUPPORT') . $max_size;
-}
+        if ($max_size > 0) {
+            echo t('NO_BROWSER_SUPPORT') . $max_size;
+        }
 ?>';
 
-    addCopyListener('upload_link_button', 'upload_link');
-    addCopyListener('preview_link_button', 'preview_link');
-    addCopyListener('direct_link_button', 'direct_link');
-    addCopyListener('delete_link_button', 'delete_link');
-    addTextCopyListener('password_copy_button', 'output_key');
+addCopyListener('upload_link_button', 'upload_link');
+addCopyListener('preview_link_button', 'preview_link');
+addCopyListener('direct_link_button', 'direct_link');
+addCopyListener('delete_link_button', 'delete_link');
+addTextCopyListener('password_copy_button', 'output_key');
 // @license-end
+// show password toggle
+document.getElementById('show_password')?.addEventListener('change', function() {
+    const pwd = document.getElementById('input_key');
+    if (pwd) {
+        pwd.type = this.checked ? 'text' : 'password';
+    }
+});
 </script>
 <?php require(JIRAFEAU_ROOT . 'lib/template/footer.php'); ?>
