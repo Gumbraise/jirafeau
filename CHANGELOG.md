@@ -14,6 +14,7 @@
 
 ## Version 4.7.x (not yet released)
 
+- Favicon was missing in the `modern` theme
 - ...
 
 ## Version 4.7.1
