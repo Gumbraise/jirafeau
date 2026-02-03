@@ -19,7 +19,7 @@ cache:
     - curl -sS https://getcomposer.org/installer | php
     # Create composer.json file manually, since this is a project without any non-dev dependencies yet
     - php composer.phar require --dev php-parallel-lint/php-parallel-lint
-    - php composer.phar require --dev friendsofphp/php-cs-fixer:3.64.0
+    - php composer.phar require --dev friendsofphp/php-cs-fixer:3.93.1
     # Install all project dependencies
     - php composer.phar install
 
