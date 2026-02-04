@@ -183,7 +183,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         echo 'Error 9';
         exit;
     }
-    if (strlen($link['key']) > 0 && hash('sha256',$key) != $link['key']) {
+    if (strlen($link['key']) > 0 && hash('sha256', $key) != $link['key']) {
         sleep(2);
         echo 'Error 10';
         exit;
