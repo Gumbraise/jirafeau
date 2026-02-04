@@ -544,7 +544,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     /* hash password or empty. */
     $password = '';
     if (!empty($key)) {
-        $password = md5($key);
+        $password = hash('sha256',$key);
     }
 
     /* create link file */
@@ -1088,10 +1088,10 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
     $w_path = $p . $ref . '_data';
     touch($w_path);
 
-    /* md5 password or empty */
+    /* sha256 password or empty */
     $password = '';
     if (!empty($key)) {
-        $password = md5($key);
+        $password = hash('sha256',$key);
     }
 
     /* Store information. */
@@ -1379,7 +1379,7 @@ function jirafeau_decrypt_file_legacy($fp_src, $fp_dst, $k)
     $m = mcrypt_module_open('rijndael-256', '', 'ofb', '');
     /* Extract key and iv. */
     $crypt_key = $k;
-    $hash_key = md5($crypt_key);
+    $hash_key = hash('sha256',$crypt_key);
     $iv = jirafeau_crypt_create_iv($hash_key, mcrypt_enc_get_iv_size($m));
     /* Init module. */
     mcrypt_generic_init($m, $hash_key, $iv);
@@ -1642,7 +1642,7 @@ function jirafeau_escape($string)
 function jirafeau_admin_session_start()
 {
     $_SESSION['admin_auth'] = true;
-    $_SESSION['admin_csrf'] = md5(uniqid(mt_rand(), true));
+    $_SESSION['admin_csrf'] = hash('sha256',uniqid(mt_rand(), true));
 }
 
 function jirafeau_session_end()
