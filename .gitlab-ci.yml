@@ -3,10 +3,12 @@ cache:
   paths:
     - vendor/
 
-# Run tests for php:8.2
-job_lint_app_82:
-  image: php:8.2
-  before_script: &before_linter_script
+# Aliases and Anchors for reuse
+
+.linter_script: &linter_script
+    - ./vendor/bin/parallel-lint --gitlab --exclude vendor .
+    - ./vendor/bin/php-cs-fixer -vvv check . --using-cache=no --rules=@PSR12,-single_space_around_construct
+.before_script: &before_linter_script
     # Install git, the docker php image doesn't have it installed by default
     - apt-get update -yqq
     - apt-get install git -yqq
@@ -17,24 +19,63 @@ job_lint_app_82:
     - curl -sS https://getcomposer.org/installer | php
     # Create composer.json file manually, since this is a project without any non-dev dependencies yet
     - php composer.phar require --dev php-parallel-lint/php-parallel-lint
-    - php composer.phar require --dev friendsofphp/php-cs-fixer:3.64.0
+    - php composer.phar require --dev friendsofphp/php-cs-fixer:3.93.1
     # Install all project dependencies
     - php composer.phar install
-  script: &linter_script
-    - ./vendor/bin/parallel-lint --exclude vendor .
-    - ./vendor/bin/php-cs-fixer -vvv check . --using-cache=no --rules=@PSR12,-single_space_around_construct
+
+.enableWarningOnFailure: &linter_warning
+  allow_failure:
+      exit_codes:
+        - 1
+
+
+# Run tests for php:8.5
+job_lint_app_85:
+  image: php:8.5
+  before_script: *before_linter_script
+  script: *linter_script
+
+# Run tests for php:8.4
+job_lint_app_84:
+  image: php:8.4
+  before_script: *before_linter_script
+  script: *linter_script
+
+job_lint_app_83:
+  image: php:8.3
+  before_script: *before_linter_script
+  script: *linter_script
+
+# Run tests for php:8.2
+job_lint_app_82:
+  image: php:8.2
+  before_script: *before_linter_script
+  script: *linter_script
+
+
+# =================
+# Deprecated ones START
+# =================
 
 # Run tests for php:8.1
 job_lint_app_81:
   image: php:8.1
   before_script: *before_linter_script
   script: *linter_script
+  <<: *linter_warning
+  
+
 
 # Run tests for php:7.4
 job_lint_app_74:
   image: php:7.4
   before_script: *before_linter_script
   script: *linter_script
+  <<: *linter_warning
+
+# =================
+# Deprecated ones END
+# =================
 
 publish:
   image: docker:latest
