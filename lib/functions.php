@@ -544,7 +544,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     /* hash password or empty. */
     $password = '';
     if (!empty($key)) {
-        $password = hash('sha256', $key);
+        $password = '[SHA256]'.hash('sha256', $key);
     }
 
     /* create link file */
@@ -1091,7 +1091,7 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
     /* sha256 password or empty */
     $password = '';
     if (!empty($key)) {
-        $password = hash('sha256', $key);
+        $password = '[SHA256]'.hash('sha256', $key);
     }
 
     /* Store information. */
