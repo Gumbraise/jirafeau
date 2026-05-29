@@ -1379,7 +1379,7 @@ function jirafeau_decrypt_file_legacy($fp_src, $fp_dst, $k)
     $m = mcrypt_module_open('rijndael-256', '', 'ofb', '');
     /* Extract key and iv. */
     $crypt_key = $k;
-    $hash_key = hash('sha256', $crypt_key);
+    $hash_key = md5($crypt_key);
     $iv = jirafeau_crypt_create_iv($hash_key, mcrypt_enc_get_iv_size($m));
     /* Init module. */
     mcrypt_generic_init($m, $hash_key, $iv);
