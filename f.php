@@ -173,8 +173,7 @@ if (!empty($link['key'])) {
     } else {
         if (strpos($link['key'], '[SHA256]') == 0 && hash_equals(substr($link['key'], 8), hash('sha256', $_POST['key']))) {
             $password_challenged = true;
-        }
-        elseif (hash_equals($link['key'], md5($_POST['key']))) {
+        } elseif (hash_equals($link['key'], md5($_POST['key']))) {
             $password_challenged = true;
         } else {
             sleep(2);
