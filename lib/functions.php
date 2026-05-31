@@ -464,9 +464,9 @@ function jirafeau_handle_add_file_encryption($crypt_module_enabled, $file_path)
         error_log("PHP extension sodium not loaded, won't encrypt in Jirafeau");
     }
     if ($crypt_module_enabled == true && extension_loaded('sodium') == true) {
-        $crypt_key = jirafeau_encrypt_file($file_path, $file_path.'crypt');
+        $crypt_key = jirafeau_encrypt_file($file_path, $file_path.'.crypt');
         if (strlen($crypt_key) > 0) {
-            if (rename($file_path.'crypt', $file_path) === true) {
+            if (rename($file_path.'.crypt', $file_path) === true) {
                 $crypted = true;
             }
         }
