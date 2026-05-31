@@ -480,8 +480,8 @@ function classic_upload (file, time, password, one_time)
 function check_html5_file_api ()
 {
 <?php
-    if (isset($cfg['debug_enforce_legacy_upload']) && $cfg['debug_enforce_legacy_upload']) { ?>
-    // Enforce legacy upload is enabled through config!
+    if (isset($cfg['debug_enforce_classic_upload']) && $cfg['debug_enforce_classic_upload']) { ?>
+    // Enforce classic upload is enabled through config!
     return false;
 <?php
     }

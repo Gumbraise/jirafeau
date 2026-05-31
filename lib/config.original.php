@@ -235,9 +235,9 @@ $cfg['installation_done'] = false;
  */
 $cfg['debug'] = false;
 
-/* Enable this debug flag to enforce the legacy (synchronous) file upload mechanism.
+/* Enable this debug flag to enforce the classic (synchronous) file upload mechanism.
  */
-$cfg['debug_enforce_legacy_upload'] = false;
+$cfg['debug_enforce_classic_upload'] = false;
 
 /* Set Jirafeau's maximal upload chunk
  * When Jirafeau upload a large file, Jirafeau sends several data chunks to fit server's capabilities.
