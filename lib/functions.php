@@ -554,7 +554,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
         $handle,
         $name . NL. $mime_type . NL. $size . NL. $password . NL. $time .
             NL . $hash. NL . ($one_time_download ? 'O' : 'R') . NL . time() .
-            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C' : 'O')
+            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C2' : 'O')
     );
     fclose($handle);
     $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
