@@ -104,6 +104,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - Sven Dickert
 - Sylke Vicious
 - Szylu
+- TehPeGaSuS
 - Thomas LEBEAU
 - Thomas Sontheimer
 - Tymofij Lytvynenko
