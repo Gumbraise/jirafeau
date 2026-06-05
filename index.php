@@ -163,7 +163,8 @@ if ($cfg['download_password_requirement'] === 'generated') {
     if ($cfg['download_password_requirement'] === 'required') {
         echo ' required';
     }
-    echo '/></td></tr>';
+    echo ' /> <input type="checkbox" id="show_password"> <label for="show_password">Show password</label>';
+    echo '</td></tr>';
 }?>
         <tr>
         <td><label for="select_time"><?php echo t('TIME_LIM') . ':'; ?></label></td>
@@ -225,5 +226,12 @@ if ($max_size > 0) {
     addCopyListener('delete_link_button', 'delete_link');
     addTextCopyListener('password_copy_button', 'output_key');
 // @license-end
+// show password toggle
+    document.getElementById('show_password')?.addEventListener('change', function() {
+        const pwd = document.getElementById('input_key');
+        if (pwd) {
+            pwd.type = this.checked ? 'text' : 'password';
+        }
+    });
 </script>
 <?php require(JIRAFEAU_ROOT . 'lib/template/footer.php'); ?>
