@@ -1,9 +1,9 @@
 <?php
 /*
- *  Jyraphe, your web file repository
- *  Copyright (C) 2013
- *  Jerome Jutteau <jerome@jutteau.fr>
- *  Jimmy Beauvois <jimmy.beauvois@gmail.com>
+ *  Jirafeau, your web file repository
+ *  Copyright (C) 2008  Julien "axolotl" BERNARD <axolotl@magieeternelle.org>
+ *  Copyright (C) 2015  Jerome Jutteau <jerome@jutteau.fr>
+ *  Copyright (C) 2024  Jirafeau project <https://gitlab.com/jirafeau> (see AUTHORS.md)
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU Affero General Public License as
@@ -17,11 +17,6 @@
  *
  *  You should have received a copy of the GNU Affero General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-/*
- * This stylesheet is the default stylesheet for Jyraphe.
- * The content is dynamically generated for easier handling.
  */
 
 $dark = '#8B4513';
