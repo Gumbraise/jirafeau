@@ -544,7 +544,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     /* hash password or empty. */
     $password = '';
     if (!empty($key)) {
-        $password = md5($key);
+        $password = '[SHA256]' . hash('sha256', $key);
     }
 
     /* create link file */
@@ -1088,10 +1088,10 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
     $w_path = $p . $ref . '_data';
     touch($w_path);
 
-    /* md5 password or empty */
+    /* sha256 password or empty */
     $password = '';
     if (!empty($key)) {
-        $password = md5($key);
+        $password = '[SHA256]' . hash('sha256', $key);
     }
 
     /* Store information. */
@@ -1642,7 +1642,7 @@ function jirafeau_escape($string)
 function jirafeau_admin_session_start()
 {
     $_SESSION['admin_auth'] = true;
-    $_SESSION['admin_csrf'] = md5(uniqid(mt_rand(), true));
+    $_SESSION['admin_csrf'] = hash('sha256', uniqid(mt_rand(), true));
 }
 
 function jirafeau_session_end()
