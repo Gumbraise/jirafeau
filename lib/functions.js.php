@@ -430,9 +430,9 @@ function classic_upload (file, time, password, one_time)
     req.upload.addEventListener ("progress", upload_progress, false);
     req.addEventListener ("error", XHRErrorHandler, false);
     req.addEventListener ("abort", XHRErrorHandler, false);
-    req.onreadystatechange = function ()
+    req.onload = function ()
     {
-        if (req.readyState == 4 && req.status == 200)
+        if (req.status === 200)
         {
             var res = req.responseText;
 
@@ -479,6 +479,13 @@ function classic_upload (file, time, password, one_time)
 
 function check_html5_file_api ()
 {
+<?php
+    if (isset($cfg['debug_enforce_classic_upload']) && $cfg['debug_enforce_classic_upload']) { ?>
+    // Enforce classic upload is enabled through config!
+    return false;
+<?php
+    }
+?>
     return window.File && window.FileReader && window.FileList && window.Blob;
 }
 
