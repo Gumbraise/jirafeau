@@ -233,3 +233,23 @@ font-size:90%;
   padding-left: 20px;
   background: url(email.png) no-repeat;
 }
+
+#show_password {
+  flex: 1 1 auto;
+  position: absolute;
+  right: 0%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 30%;
+}
+#show_password:hover {
+  opacity: 100%;
+}
+
+.passwordcolumn {
+  display: flex;
+  position: relative;
+  align-items: center;
+  width: 100%;
+}
