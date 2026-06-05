@@ -156,14 +156,15 @@ if ($cfg['download_password_requirement'] === 'generated') {
     echo '<input type="hidden" name="key" id="input_key" value="' . $download_pass .'"/>';
 } else {
     echo '<tr><td><label for="input_key">' . t('PSW') . ':' . '</label></td>';
-    echo '<td><input type="password" name="key" id="input_key" autocomplete = "new-password"';
+    echo '<td class="passwordcolumn"><input type="password" name="key" id="input_key" autocomplete = "new-password"';
     if ($cfg['download_password_policy'] === 'regex') {
         echo ' pattern="' . substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2) . '"'; //remove php delimiters
     }
     if ($cfg['download_password_requirement'] === 'required') {
         echo ' required';
     }
-    echo ' /> <input type="checkbox" id="show_password"> <label for="show_password">Show password</label>';
+    echo ' /> <button data-toggle="false" type="button" id="show_password">
+    </button>';
     echo '</td></tr>';
 }?>
         <tr>
@@ -207,6 +208,20 @@ if ($cfg['maximal_upload_size'] >= 1024) {
 
 <script type="text/javascript" lang="Javascript">
 // @license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3-or-Later
+    // ICONS in SVG
+    const EYE_OPEN = `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true" version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+ <path d="m1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke-width="1.7604"/>
+ <circle cx="12" cy="12" r="3"/>
+ <path d="m2.9757 2.7901 18.56 18.546" display="none" fill="none" stroke="#000" stroke-width="1.7604"/>
+</svg>`;
+    const EYE_CLOSE = `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" aria-hidden="true" version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+ <path d="m1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke-width="1.7604"/>
+ <circle cx="12" cy="12" r="3"/>
+ <path d="m2.9757 2.7901 18.56 18.546" fill="none" stroke="#000" stroke-width="1.7604"/>
+</svg>`;
+
+
+
     document.getElementById('error_pop').style.display = 'none';
     document.getElementById('uploading').style.display = 'none';
     document.getElementById('upload_finished').style.display = 'none';
@@ -227,10 +242,20 @@ if ($max_size > 0) {
     addTextCopyListener('password_copy_button', 'output_key');
 // @license-end
 // show password toggle
-    document.getElementById('show_password')?.addEventListener('change', function() {
+    document.getElementById('show_password').innerHTML = EYE_OPEN;
+    document.getElementById('show_password')?.addEventListener('click', function() {
         const pwd = document.getElementById('input_key');
-        if (pwd) {
-            pwd.type = this.checked ? 'text' : 'password';
+        const show_password = pwd.type === 'text';
+        const next_show_password_toggle_value  = !show_password;
+        if (next_show_password_toggle_value) {
+            pwd.type = 'text';
+            document.getElementById('show_password').setAttribute('data-show-enabled', true);
+            // symbol eye strikethrough
+            document.getElementById('show_password').innerHTML = EYE_CLOSE;
+        } else {
+            pwd.type = 'password';
+            // symbol eye 
+            document.getElementById('show_password').innerHTML = EYE_OPEN;
         }
     });
 </script>
