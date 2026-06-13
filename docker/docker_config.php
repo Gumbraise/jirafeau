@@ -194,6 +194,7 @@ function run_setup(&$cfg)
     env_2_cfg_bool($cfg, 'one_time_download_preselected');
     env_2_cfg_bool($cfg, 'enable_crypt');
     env_2_cfg_bool($cfg, 'debug');
+    env_2_cfg_bool($cfg, 'debug_enforce_classic_upload');
     env_2_cfg_int($cfg, 'maximal_upload_size');
     env_2_cfg_string_array($cfg, 'upload_password');
     env_2_cfg_string_array($cfg, 'upload_ip');
