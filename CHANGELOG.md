@@ -14,8 +14,12 @@
 
 ## Version 4.7.x (not yet released)
 
+- Added a button for showing the download password before uploading the file
 - Favicon was missing in the `modern` theme
+- Download passwords are now stored as SHA256 hashes
+- Downloading encrypted files uploaded using "classic upload" (using just plain HTTP POST without the HTML5 file API) could not be downloaded. This was caused by not correctly marking the files as encrypted.
 - ...
+- Upgrade from 4.7.1: in-place upgrade
 
 ## Version 4.7.1
 
