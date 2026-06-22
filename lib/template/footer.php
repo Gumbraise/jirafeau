@@ -11,7 +11,7 @@
         if (false === empty($cfg['installation_done'])) {
             if(false === empty($cfg['organisation'])) {
                 echo ' <span>|</span> ';
-                echo ' ' . t('DESIGNED')  . ' ' .  $cfg['organisation'];
+                echo ' ' . t('DESIGNED')  . ' ' .  jirafeau_escape($cfg['organisation']);
             }
 
             echo ' <span>|</span> ';
