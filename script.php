@@ -163,7 +163,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         $d = $_GET['d'];
     }
 
-    if (!preg_match('/[0-9a-zA-Z_-]+$/', $link_name)) {
+    if (!preg_match('/^[0-9a-zA-Z_-]+$/', $link_name)) {
         echo 'Error 7';
         exit;
     }
