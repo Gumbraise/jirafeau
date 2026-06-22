@@ -36,7 +36,7 @@ if (!isset($_GET['h']) || empty($_GET['h'])) {
 
 $link_name = $_GET['h'];
 
-if (!preg_match('/[0-9a-zA-Z_-]+$/', $link_name)) {
+if (!preg_match('/^[0-9a-zA-Z_-]+$/', $link_name)) {
     require(JIRAFEAU_ROOT.'lib/template/header.php');
     echo '<div class="error"><p>' . t('FILE_404') . '</p></div>';
     require(JIRAFEAU_ROOT.'lib/template/footer.php');
@@ -82,7 +82,7 @@ if (!file_exists(VAR_FILES . $p . $link['hash'])) {
     exit;
 }
 
-if (!empty($delete_code) && $delete_code == $link['link_code']) {
+if (!empty($delete_code) && hash_equals((string) $link['link_code'], (string) $delete_code)) {
     require(JIRAFEAU_ROOT.'lib/template/header.php');
     if (isset($_POST['do_delete'])) {
         jirafeau_delete_link($link_name);
