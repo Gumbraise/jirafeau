@@ -947,6 +947,7 @@ function jirafeau_admin_bug_report($cfg)
     $out .= "- version: " . JIRAFEAU_VERSION . "<br/>";
     $jirafeau_options = [
         'debug',
+        'debug_enforce_classic_upload',
         'file_hash',
         'litespeed_workaround',
         'store_uploader_ip',
