@@ -12,13 +12,13 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
-## Version 4.7.x (not yet released)
+## Version 4.7.2
 
 - Added a button for showing the download password before uploading the file
 - Favicon was missing in the `modern` theme
 - Download passwords are now stored as SHA256 hashes
 - Downloading encrypted files uploaded using "classic upload" (using just plain HTTP POST without the HTML5 file API) could not be downloaded. This was caused by not correctly marking the files as encrypted.
-- ...
+- Few more little fixes
 - Upgrade from 4.7.1: in-place upgrade
 
 ## Version 4.7.1
