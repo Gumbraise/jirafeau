@@ -139,7 +139,7 @@ break;
         ?></label></td>
         <td class = "field"><input type = "text" name = "web_root"
         id = "input_web_root" value = "<?php
-               echo(empty($cfg['web_root']) ? jirafeau_default_web_root() : $cfg['web_root']);
+               echo htmlspecialchars(empty($cfg['web_root']) ? jirafeau_default_web_root() : $cfg['web_root'], ENT_QUOTES);
         ?>" size = "40" /></td>
         </tr> <tr> <td class = "info" colspan = "2"><?php
           echo t('DATA_DIR_EXPLAINATION');
@@ -158,7 +158,7 @@ break;
                 }
                 echo JIRAFEAU_ROOT . $var . '/';
             } else {
-                echo $cfg['var_root'];
+                echo htmlspecialchars($cfg['var_root'], ENT_QUOTES);
             }
         ?>" size = "40" /></td>
         </tr> <tr> <td colspan = "2"><input type = "submit"

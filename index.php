@@ -158,7 +158,7 @@ if ($cfg['download_password_requirement'] === 'generated') {
     echo '<tr><td><label for="input_key">' . t('PSW') . ':' . '</label></td>';
     echo '<td class="passwordcolumn"><input type="password" name="key" id="input_key" autocomplete = "new-password"';
     if ($cfg['download_password_policy'] === 'regex') {
-        echo ' pattern="' . substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2) . '"'; //remove php delimiters
+        echo ' pattern="' . jirafeau_escape(substr($cfg['download_password_policy_regex'], 1, strlen($cfg['download_password_policy_regex']) - 2)) . '"'; //remove php delimiters
     }
     if ($cfg['download_password_requirement'] === 'required') {
         echo ' required';
