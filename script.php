@@ -94,7 +94,9 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         exit;
     }
 
-    if (!isset($_POST['time']) || !$cfg['availabilities'][$_POST['time']]) {
+    if (!isset($_POST['time'])) {
+        $time = jirafeau_datestr_to_int($cfg['availability_default']);
+    } elseif (!$cfg['availabilities'][$_POST['time']]) {
         echo 'Error 4: The parameter time is invalid.';
         exit;
     } else {
@@ -441,7 +443,9 @@ elseif (isset($_GET['init_async'])) {
         exit;
     }
 
-    if (!isset($_POST['time']) || !$cfg['availabilities'][$_POST['time']]) {
+    if (!isset($_POST['time'])) {
+        $time = jirafeau_datestr_to_int($cfg['availability_default']);
+    } elseif (!$cfg['availabilities'][$_POST['time']]) {
         echo 'Error 22';
         exit;
     } else {
