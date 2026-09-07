@@ -108,6 +108,12 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         exit;
     }
 
+    // Check file extension
+    if (!jirafeau_is_extension_allowed($cfg, $_FILES['file']['name'])) {
+        echo 'Error 27: This file extension is not allowed.';
+        exit;
+    }
+
     // Check if one time download is enabled
     if (!$cfg['one_time_download'] && isset($_POST['one_time_download'])) {
         echo 'Error 26: One time download is disabled.';
@@ -413,6 +419,12 @@ elseif (isset($_GET['init_async'])) {
 
     if (!isset($_POST['filename'])) {
         echo 'Error 21';
+        exit;
+    }
+
+    // Check file extension
+    if (!jirafeau_is_extension_allowed($cfg, $_POST['filename'])) {
+        echo 'Error 28: This file extension is not allowed.';
         exit;
     }
 

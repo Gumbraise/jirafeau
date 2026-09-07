@@ -170,6 +170,13 @@ $cfg['one_time_download_preselected'] = false;
  */
 $cfg['maximal_upload_size'] = 0;
 
+/* Forbid specific file extensions from being uploaded.
+ * Leave empty to allow every extension.
+ * Extensions are matched case-insensitively and without the leading dot.
+ * $cfg['disallowed_extensions'] = array('exe', 'bat', 'sh', 'php');
+ */
+$cfg['disallowed_extensions'] = array();
+
 /* Proxy IP
  * If the installation is behind some reverse proxies, it is possible to set
  * the allowed proxy IP.

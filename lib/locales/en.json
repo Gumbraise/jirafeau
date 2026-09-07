@@ -38,6 +38,8 @@
     "UP_PSW": "Upload password",
     "2_BIG": "The file is too big",
     "FILE_LIM": "File size limited to",
+    "EXT_NOT_ALLOWED": "This file extension is not allowed",
+    "EXT_LIM": "Disallowed file extensions:",
     "FILE_DIR_W": "The file directory is not writable.",
     "LINK_DIR_W": "The link directory is not writable.",
     "ASYNC_DIR_W": "The async directory is not writable.",

@@ -351,6 +351,19 @@ function control_selected_file_size(max_size, error_str)
     }
 }
 
+// UX-only: script.php enforces disallowed_extensions independently, this
+// just warns the user before they submit a doomed upload.
+function control_selected_file_extension(disallowed_extensions, error_str)
+{
+    f_name = document.getElementById('file_select').files[0].name;
+    f_ext = f_name.includes('.') ? f_name.split('.').pop().toLowerCase() : '';
+    if (disallowed_extensions.includes(f_ext))
+    {
+        pop_failure(error_str);
+        document.getElementById('send').style.display = 'none';
+    }
+}
+
 function XHRErrorHandler(e)
 {
     var text = "${e.type}: ${e.loaded} bytes transferred"

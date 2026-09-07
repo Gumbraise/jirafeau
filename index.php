@@ -136,7 +136,9 @@ elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
             } elseif ($cfg['maximal_upload_size'] > 0) {
                 echo t('2_BIG') . ', ' . t('FILE_LIM') . " " . $cfg['maximal_upload_size'] . " MB.";
             }
-?>')"/>
+?>'); control_selected_file_extension(<?php
+            echo json_encode(array_map('strtolower', $cfg['disallowed_extensions']));
+?>, '<?php echo t('EXT_NOT_ALLOWED'); ?>.')"/>
     </p>
 
     <div id="options">
@@ -183,6 +185,9 @@ if ($cfg['maximal_upload_size'] >= 1024) {
     echo " " . $cfg['maximal_upload_size'] . " MB.</p>";
 } else {
     echo '<p class="config"></p>';
+}
+if (!empty($cfg['disallowed_extensions'])) {
+    echo '<p class="config">' . t('EXT_LIM') . ' ' . implode(', ', $cfg['disallowed_extensions']) . '</p>';
 }
 ?>
 

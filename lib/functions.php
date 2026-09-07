@@ -230,6 +230,24 @@ function jirafeau_ini_to_bytes($value)
 }
 
 /**
+ * checks if a file name's extension is allowed to be uploaded
+ * @param $cfg jirafeau config
+ * @param $filename the name of the file being uploaded
+ * @returns true if the extension is allowed
+ */
+function jirafeau_is_extension_allowed($cfg, $filename)
+{
+    if (empty($cfg['disallowed_extensions'])) {
+        return true;
+    }
+
+    $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    $disallowed = array_map('strtolower', $cfg['disallowed_extensions']);
+
+    return !in_array($extension, $disallowed);
+}
+
+/**
  * gets the maximum upload size according to php.ini
  * @returns the maximum upload size in bytes
  */
