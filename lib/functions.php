@@ -1120,6 +1120,11 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
   */
 function jirafeau_async_push($ref, $data, $code, $max_file_size)
 {
+    /* Validate ref string. */
+    if (!ctype_xdigit(trim($ref))) {
+        return "Error: Malformed ref string";
+    }
+
     /* Get async infos. */
     $a = jirafeau_get_async_ref($ref);
 
@@ -1193,6 +1198,11 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
   */
 function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_method)
 {
+    /* Validate ref string. */
+    if (!ctype_xdigit(trim($ref))) {
+        return "Error: Malformed ref string";
+    }
+
     /* Get async infos. */
     $a = jirafeau_get_async_ref($ref);
     if (count($a) == 0
