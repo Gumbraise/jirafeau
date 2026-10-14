@@ -1022,11 +1022,16 @@ function jirafeau_get_async_ref($ref)
     $out = array();
     $refinfos = VAR_ASYNC . s2p("$ref") . "$ref";
 
-    if (!file_exists($refinfos)) {
+    if (!is_file($refinfos)) {
         return $out;
     }
 
     $c = file($refinfos);
+
+    if(empty($c)) {
+        return $out;
+    }
+
     $out['file_name'] = trim($c[0]);
     $out['mime_type'] = trim($c[1]);
     $out['key'] = trim($c[2], NL);
@@ -1132,6 +1137,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
     if (count($a) == 0) {
         return "Error: cannot find transfer";
     }
+
     if ($a['next_code'] != "$code") {
         return "Error: bad transfer code";
     }
