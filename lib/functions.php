@@ -1080,9 +1080,9 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
     /* Create temporary folder. */
     $ref = '';
     $p = '';
-    $code = jirafeau_gen_random(4);
+    $code = jirafeau_gen_random(JIRAFEAU_ASYNC_CODE_LENGTH);
     do {
-        $ref = jirafeau_gen_random(32);
+        $ref = jirafeau_gen_random(JIRAFEAU_ASYNC_REF_LENGTH);
         $p = VAR_ASYNC . s2p($ref);
     } while (file_exists($p));
     @mkdir($p, 0755, true);
@@ -1125,9 +1125,17 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
   */
 function jirafeau_async_push($ref, $data, $code, $max_file_size)
 {
+    $ref = trim($ref);
+    $code = trim($code);
+
     /* Validate ref string. */
-    if (!ctype_xdigit(trim($ref))) {
+    if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
         return "Error: Malformed ref string";
+    }
+
+    /* Validate code string. */
+    if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
+        return "Error: Malformed code string";
     }
 
     /* Get async infos. */
@@ -1138,7 +1146,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
         return "Error: cannot find transfer";
     }
 
-    if ($a['next_code'] != "$code") {
+    if (!hash_equals($a['next_code'], "$code")) {
         return "Error: bad transfer code";
     }
     if ($data['error'] != UPLOAD_ERR_OK) {
@@ -1204,18 +1212,30 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
   */
 function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_method)
 {
+    $ref = trim($ref);
+    $code = trim($code);
+
     /* Validate ref string. */
-    if (!ctype_xdigit(trim($ref))) {
+    if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
         return "Error: Malformed ref string";
+    }
+
+    /* Validate code string. */
+    if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
+        return "Error: Malformed code string";
     }
 
     /* Get async infos. */
     $a = jirafeau_get_async_ref($ref);
-    if (count($a) == 0
-        || $a['next_code'] != "$code") {
-        return "Error: bad code for ending transfer";
+
+    /* Check some errors. */
+    if (count($a) == 0) {
+        return "Error: cannot find transfer";
     }
 
+    if (!hash_equals($a['next_code'], "$code")) {
+        return "Error: bad code for ending transfer";
+    }
     /* Generate link infos. */
     $p = VAR_ASYNC . s2p($ref) . $ref . "_data";
     if (!file_exists($p)) {
