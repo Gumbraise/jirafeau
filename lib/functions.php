@@ -862,7 +862,8 @@ function jirafeau_admin_clean()
                     continue;
                 }
                 $p = s2p($l['hash']);
-                if ($l['time'] > 0 && $l['time'] < time() || // expired
+                if (empty($l['time']) || // invalid
+                    $l['time'] > 0 && $l['time'] < time() || // expired
                     !file_exists(VAR_FILES . $p . $l['hash']) || // invalid
                     !file_exists(VAR_FILES . $p . $l['hash'] . '_count')) { // invalid
                     jirafeau_delete_link($node);
