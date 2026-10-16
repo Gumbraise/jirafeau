@@ -346,6 +346,7 @@ function control_selected_file_size(max_size, error_str)
         // display options
         document.getElementById('options').style.display = 'block';
         document.getElementById('send').style.display = 'block';
+        document.getElementById('send').disabled = false;
         document.getElementById('error_pop').style.display = 'none';
         document.getElementById('send').focus();
     }
@@ -360,7 +361,9 @@ function control_selected_file_extension(disallowed_extensions, error_str)
     if (disallowed_extensions.includes(f_ext))
     {
         pop_failure(error_str);
-        document.getElementById('send').style.display = 'none';
+        // keep the button visible but disabled so the user sees it is forbidden
+        document.getElementById('send').style.display = 'block';
+        document.getElementById('send').disabled = true;
     }
 }
 
