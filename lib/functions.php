@@ -1027,6 +1027,10 @@ function jirafeau_get_async_ref($ref)
         return $out;
     }
 
+    if (filesize($refinfos) == 0) {
+        return $out;
+    }
+
     $c = file($refinfos);
 
     if(empty($c)) {
@@ -1131,12 +1135,12 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
 
     /* Validate ref string. */
     if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
-        return "Error: Malformed ref string";
+        return 'Error: Malformed ref string';
     }
 
     /* Validate code string. */
     if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
-        return "Error: Malformed code string";
+        return 'Error: Malformed code string';
     }
 
     /* Get async infos. */
@@ -1144,11 +1148,11 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
 
     /* Check some errors. */
     if (count($a) == 0) {
-        return "Error: cannot find transfer";
+        return 'Error: cannot find transfer';
     }
 
     if (!hash_equals($a['next_code'], "$code")) {
-        return "Error: bad transfer code";
+        return 'Error: bad transfer code';
     }
     if ($data['error'] != UPLOAD_ERR_OK) {
         // Check error code in https://www.php.net/manual/en/features.file-upload.errors.php
@@ -1156,10 +1160,10 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
         return "Error: upload error: {$data_details}";
     }
     if (empty($data['tmp_name'])) {
-        return "Error: missing tmp_name";
+        return 'Error: missing tmp_name';
     }
     if (!is_uploaded_file($data['tmp_name'])) {
-        return "Error: tmp_name may not be uploaded";
+        return 'Error: tmp_name may not be uploaded';
     }
 
     $p = s2p($ref);
@@ -1172,7 +1176,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
     if ($max_file_size > 0 &&
         filesize($r_path) + filesize($w_path) > $max_file_size * 1024 * 1024) {
         jirafeau_async_delete($ref);
-        return "Error: file size is above upload limit";
+        return 'Error: file size is above upload limit';
     }
 
     /* Concatenate data. */
@@ -1183,7 +1187,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
             fclose($r);
             fclose($w);
             jirafeau_async_delete($ref);
-            return "Error: cannot write file";
+            return 'Error: cannot write file';
         }
     }
     fclose($r);
@@ -1218,12 +1222,12 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
 
     /* Validate ref string. */
     if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
-        return "Error: Malformed ref string";
+        return 'Error: Malformed ref string';
     }
 
     /* Validate code string. */
     if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
-        return "Error: Malformed code string";
+        return 'Error: Malformed code string';
     }
 
     /* Get async infos. */
@@ -1231,16 +1235,16 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
 
     /* Check some errors. */
     if (count($a) == 0) {
-        return "Error: cannot find transfer";
+        return 'Error: cannot find transfer';
     }
 
     if (!hash_equals($a['next_code'], "$code")) {
-        return "Error: bad code for ending transfer";
+        return 'Error: bad code for ending transfer';
     }
     /* Generate link infos. */
-    $p = VAR_ASYNC . s2p($ref) . $ref . "_data";
+    $p = VAR_ASYNC . s2p($ref) . $ref . '_data';
     if (!file_exists($p)) {
-        return "Error: referenced file does not exist";
+        return 'Error: referenced file does not exist';
     }
 
     /* Store filesize before encrypting the file */
@@ -1295,10 +1299,10 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
     $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
     $l = s2p("$hash_link");
     if (!@mkdir(VAR_LINKS . $l, 0755, true)) {
-        return "Error: cannot create folder in LINKS";
+        return 'Error: cannot create folder in LINKS';
     }
     if (!rename($link_tmp_name, VAR_LINKS . $l . $hash_link)) {
-        return "Error: cannot rename file in LINKS";
+        return 'Error: cannot rename file in LINKS';
     }
 
     /* Clean async upload. */
