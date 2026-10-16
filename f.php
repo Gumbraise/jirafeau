@@ -274,11 +274,11 @@ else {
     }
 }
 
+jirafeau_write_download_stats($link_name, get_ip_address($cfg));
+
 if ($link['onetime'] == 'O') {
     jirafeau_delete_link($link_name);
 }
-
-jirafeau_write_download_stats($link_name, get_ip_address($cfg));
 
 exit;
 
