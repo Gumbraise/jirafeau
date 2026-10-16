@@ -23,6 +23,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - Cem
 - Dan Untenzu
 - Dark Horse
+- Davi Torres
 - Dennis de Best
 - Edwin Bos
 - Erik Hubers
@@ -68,6 +69,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - Mathis Mensing
 - Matthieu Schneider
 - Mattias Münster
+- Max Hausch
 - max keiser
 - Michal Čihař
 - Milo Ivir
