@@ -241,6 +241,8 @@ function jirafeau_is_extension_allowed($cfg, $filename)
         return true;
     }
 
+    // trailing dots and whitespace are dropped on storage or by the client OS
+    $filename = rtrim($filename, " \t\n\r\0\x0B.");
     $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
     $disallowed = array_map('strtolower', $cfg['disallowed_extensions']);
 

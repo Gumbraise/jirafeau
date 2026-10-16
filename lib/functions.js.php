@@ -356,7 +356,7 @@ function control_selected_file_size(max_size, error_str)
 // just warns the user before they submit a doomed upload.
 function control_selected_file_extension(disallowed_extensions, error_str)
 {
-    f_name = document.getElementById('file_select').files[0].name;
+    f_name = document.getElementById('file_select').files[0].name.replace(/[\s.]+$/, '');
     f_ext = f_name.includes('.') ? f_name.split('.').pop().toLowerCase() : '';
     if (disallowed_extensions.includes(f_ext))
     {
