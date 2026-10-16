@@ -14,7 +14,11 @@
 
 ## Version 4.7.x (not yet released)
 
+- Download stats are written before a one-time link is deleted. The other way around would cause write attempts to a directory that was already gone.
+- The `time` parameter is now optional in `script.php`
+- Few little more fixes and refactoring
 - ...
+- Upgrade from 4.7.2: in-place upgrade
 
 ## Version 4.7.2
 
