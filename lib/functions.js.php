@@ -360,7 +360,12 @@ function control_selected_file_extension(disallowed_extensions, error_str)
     f_ext = f_name.includes('.') ? f_name.split('.').pop().toLowerCase() : '';
     if (disallowed_extensions.includes(f_ext))
     {
-        pop_failure(error_str);
+        // control_selected_file_size runs first: keep its error, if any, and add ours
+        var error_pop = document.getElementById('error_pop');
+        if (error_pop.style.display === 'none')
+            pop_failure(error_str);
+        else
+            error_pop.innerHTML += '<br />' + error_str;
         // keep the button visible but disabled so the user sees it is forbidden
         document.getElementById('send').style.display = 'block';
         document.getElementById('send').disabled = true;
