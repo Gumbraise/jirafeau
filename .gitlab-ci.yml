@@ -63,15 +63,6 @@ job_lint_app_81:
   before_script: *before_linter_script
   script: *linter_script
   <<: *linter_warning
-  
-
-
-# Run tests for php:7.4
-job_lint_app_74:
-  image: php:7.4
-  before_script: *before_linter_script
-  script: *linter_script
-  <<: *linter_warning
 
 # =================
 # Deprecated ones END
