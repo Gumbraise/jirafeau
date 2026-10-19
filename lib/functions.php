@@ -242,11 +242,18 @@ function jirafeau_is_extension_allowed($cfg, $filename)
     }
 
     // trailing dots and whitespace are dropped on storage or by the client OS
-    $filename = rtrim($filename, " \t\n\r\0\x0B.");
-    $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-    $disallowed = array_map('strtolower', $cfg['disallowed_extensions']);
+    $filename = strtolower(rtrim($filename, " \t\n\r\0\x0B."));
 
-    return !in_array($extension, $disallowed);
+    // suffix match so that compound extensions such as 'tar.gz' work too;
+    // 'gz' still covers 'archive.tar.gz'
+    foreach ($cfg['disallowed_extensions'] as $extension) {
+        $suffix = '.' . strtolower($extension);
+        if (substr($filename, -strlen($suffix)) === $suffix) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**
