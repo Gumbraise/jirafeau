@@ -356,6 +356,8 @@ function control_selected_file_size(max_size, error_str)
 // just warns the user before they submit a doomed upload.
 function control_selected_file_extension(disallowed_extensions, error_str)
 {
+    if (disallowed_extensions.length === 0)
+        return;
     f_name = document.getElementById('file_select').files[0].name.replace(/[\s.]+$/, '').toLowerCase();
     // suffix match so that compound extensions such as 'tar.gz' work too
     if (disallowed_extensions.some(function (ext) { return f_name.endsWith('.' + ext); }))
@@ -369,7 +371,10 @@ function control_selected_file_extension(disallowed_extensions, error_str)
         // keep the button visible but disabled so the user sees it is forbidden
         document.getElementById('send').style.display = 'block';
         document.getElementById('send').disabled = true;
+        document.getElementById('disallowed_extensions').style.display = 'block';
     }
+    else
+        document.getElementById('disallowed_extensions').style.display = 'none';
 }
 
 function XHRErrorHandler(e)

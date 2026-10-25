@@ -187,7 +187,8 @@ if ($cfg['maximal_upload_size'] >= 1024) {
     echo '<p class="config"></p>';
 }
 if (!empty($cfg['disallowed_extensions'])) {
-    echo '<p class="config">' . t('EXT_LIM') . ' ' . implode(', ', jirafeau_disallowed_extensions($cfg)) . '</p>';
+    // only shown when the selected file matches, see control_selected_file_extension()
+    echo '<p id="disallowed_extensions" class="config" style="display: none">' . t('EXT_LIM') . ' ' . implode(', ', jirafeau_disallowed_extensions($cfg)) . '</p>';
 }
 ?>
 
