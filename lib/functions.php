@@ -230,6 +230,30 @@ function jirafeau_ini_to_bytes($value)
 }
 
 /**
+ * returns the configured disallowed extensions, lower-cased and without
+ * a leading dot
+ * @param $cfg jirafeau config
+ * @returns array of normalized extensions
+ */
+function jirafeau_disallowed_extensions($cfg)
+{
+    if (empty($cfg['disallowed_extensions'])) {
+        return array();
+    }
+
+    // tolerate a leading dot in the config, e.g. '.jpg' instead of 'jpg'
+    $extensions = array();
+    foreach ($cfg['disallowed_extensions'] as $extension) {
+        $extension = ltrim(strtolower(trim($extension)), '.');
+        if ($extension !== '') {
+            $extensions[] = $extension;
+        }
+    }
+
+    return $extensions;
+}
+
+/**
  * checks if a file name's extension is allowed to be uploaded
  * @param $cfg jirafeau config
  * @param $filename the name of the file being uploaded
@@ -237,7 +261,8 @@ function jirafeau_ini_to_bytes($value)
  */
 function jirafeau_is_extension_allowed($cfg, $filename)
 {
-    if (empty($cfg['disallowed_extensions'])) {
+    $extensions = jirafeau_disallowed_extensions($cfg);
+    if (empty($extensions)) {
         return true;
     }
 
@@ -246,8 +271,8 @@ function jirafeau_is_extension_allowed($cfg, $filename)
 
     // suffix match so that compound extensions such as 'tar.gz' work too;
     // 'gz' still covers 'archive.tar.gz'
-    foreach ($cfg['disallowed_extensions'] as $extension) {
-        $suffix = '.' . strtolower($extension);
+    foreach ($extensions as $extension) {
+        $suffix = '.' . $extension;
         if (substr($filename, -strlen($suffix)) === $suffix) {
             return false;
         }
