@@ -185,6 +185,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         echo 'Error 9';
         exit;
     }
+    // info: link contains the used hash as prefix 
     $file_hash = "[SHA256]" . hash('sha256', $key); 
     if (strlen($link['key']) > 0 &&  $file_hash != $link['key']) {
         sleep(2);
