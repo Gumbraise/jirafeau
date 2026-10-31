@@ -171,9 +171,13 @@ if (!empty($link['key'])) {
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
         exit;
     } else {
-        if (strpos($link['key'], '[SHA256]') == 0 && hash_equals(substr($link['key'], 8), hash('sha256', $_POST['key']))) {
+        $sha_hash_compare = strpos($link['key'], '[SHA256]') === 0 && hash_equals(substr($link['key'], 8), hash('sha256', $_POST['key']));
+        // legacy md5 compare - before prefixing
+        $md5_legacy_hash_compare = hash_equals($link['key'], md5($_POST['key']));
+
+        if ( $sha_hash_compare ) {
             $password_challenged = true;
-        } elseif (hash_equals($link['key'], md5($_POST['key']))) {
+        } elseif ( $md5_legacy_hash_compare ) {
             $password_challenged = true;
         } else {
             sleep(2);

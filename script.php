@@ -191,7 +191,12 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         echo 'Error 9';
         exit;
     }
-    if (strlen($link['key']) > 0 && hash('sha256', $key) != $link['key']) {
+    // sha hash compare
+    $sha_hash_compare = (strpos($link['key'], '[SHA256]') === 0 && hash_equals(substr($link['key'], 8), hash('sha256', $key)));
+    // legacy md5 compare - before prefixing
+    $md5_legacy_hash_compare = hash_equals($link['key'], md5($key));
+    
+    if (strlen($link['key']) > 0 && !$sha_hash_compare && !$md5_legacy_hash_compare ) {
         sleep(2);
         echo 'Error 10';
         exit;
