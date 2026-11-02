@@ -101,6 +101,7 @@ Available options:
 - `UPLOAD_IP`: set one or more ip allowed to upload files (separated by comma).
 - `UPLOAD_IP_NO_PASSWORD`: set one or more ip allowed to upload files without password (separated by comma).
 - `PROXY_IP`: set one or more proxy ip (separated by comma).
+- `DISALLOWED_EXTENSIONS`: forbid specific file extensions from being uploaded (separated by comma).
 - `STORE_UPLOADER_IP`: set to 1 or 0 to enable or disable keeping sender's IP with the _link_ file.
 - `DOWNLOAD_PASSWORD_REQUIREMENT`: set to 'optional' (default), 'required' or 'generated' to make a password for downloading optional, required or generated
 - `DOWNLOAD_PASSWORD_GEN_LEN`: set length of generated download passwords
