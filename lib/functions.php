@@ -1047,6 +1047,7 @@ function jirafeau_admin_bug_report($cfg)
 
     $out .= "# OS details<br/>";
     $out .= "- OS: " . php_uname() . "<br/>";
+    $out .= "- Docker: " . (is_file('/.dockerenv') ? 'yes' : 'no') . "<br/>";
     $out .= "<br/>";
 
     $out .= "# Browser details<br/>";
