@@ -1,4 +1,6 @@
 {
+    "EXT_LIM": "Nicht erlaubte Dateitypen:",
+    "EXT_NOT_ALLOWED": "Dieser Dateityp ist nicht erlaubt",
     "NO": "Nein",
     "YES": "Ja",
     "ENCRYPTED": "Verschlüsselt",
