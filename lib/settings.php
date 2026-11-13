@@ -84,6 +84,9 @@ define('JIRAFEAU_USER_AUTH_BY_PASSWORD', 2);
 
 define('JIRAFEAU_SODIUM_CHUNKSIZE', 1024);
 
+define('JIRAFEAU_ASYNC_REF_LENGTH', 32);
+define('JIRAFEAU_ASYNC_CODE_LENGTH', 4);
+
 // Define some Sodium constants from newer PHP versions if they are not available
 
 if (extension_loaded('sodium')) {

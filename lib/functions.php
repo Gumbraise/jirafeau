@@ -914,7 +914,8 @@ function jirafeau_admin_clean()
                     continue;
                 }
                 $p = s2p($l['hash']);
-                if ($l['time'] > 0 && $l['time'] < time() || // expired
+                if (empty($l['time']) || // invalid
+                    $l['time'] > 0 && $l['time'] < time() || // expired
                     !file_exists(VAR_FILES . $p . $l['hash']) || // invalid
                     !file_exists(VAR_FILES . $p . $l['hash'] . '_count')) { // invalid
                     jirafeau_delete_link($node);
@@ -1075,11 +1076,20 @@ function jirafeau_get_async_ref($ref)
     $out = array();
     $refinfos = VAR_ASYNC . s2p("$ref") . "$ref";
 
-    if (!file_exists($refinfos)) {
+    if (!is_file($refinfos)) {
+        return $out;
+    }
+
+    if (filesize($refinfos) == 0) {
         return $out;
     }
 
     $c = file($refinfos);
+
+    if(empty($c)) {
+        return $out;
+    }
+
     $out['file_name'] = trim($c[0]);
     $out['mime_type'] = trim($c[1]);
     $out['key'] = trim($c[2], NL);
@@ -1128,9 +1138,9 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
     /* Create temporary folder. */
     $ref = '';
     $p = '';
-    $code = jirafeau_gen_random(4);
+    $code = jirafeau_gen_random(JIRAFEAU_ASYNC_CODE_LENGTH);
     do {
-        $ref = jirafeau_gen_random(32);
+        $ref = jirafeau_gen_random(JIRAFEAU_ASYNC_REF_LENGTH);
         $p = VAR_ASYNC . s2p($ref);
     } while (file_exists($p));
     @mkdir($p, 0755, true);
@@ -1173,15 +1183,29 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
   */
 function jirafeau_async_push($ref, $data, $code, $max_file_size)
 {
+    $ref = trim($ref);
+    $code = trim($code);
+
+    /* Validate ref string. */
+    if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
+        return 'Error: Malformed ref string';
+    }
+
+    /* Validate code string. */
+    if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
+        return 'Error: Malformed code string';
+    }
+
     /* Get async infos. */
     $a = jirafeau_get_async_ref($ref);
 
     /* Check some errors. */
     if (count($a) == 0) {
-        return "Error: cannot find transfer";
+        return 'Error: cannot find transfer';
     }
-    if ($a['next_code'] != "$code") {
-        return "Error: bad transfer code";
+
+    if (!hash_equals($a['next_code'], "$code")) {
+        return 'Error: bad transfer code';
     }
     if ($data['error'] != UPLOAD_ERR_OK) {
         // Check error code in https://www.php.net/manual/en/features.file-upload.errors.php
@@ -1189,10 +1213,10 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
         return "Error: upload error: {$data_details}";
     }
     if (empty($data['tmp_name'])) {
-        return "Error: missing tmp_name";
+        return 'Error: missing tmp_name';
     }
     if (!is_uploaded_file($data['tmp_name'])) {
-        return "Error: tmp_name may not be uploaded";
+        return 'Error: tmp_name may not be uploaded';
     }
 
     $p = s2p($ref);
@@ -1205,7 +1229,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
     if ($max_file_size > 0 &&
         filesize($r_path) + filesize($w_path) > $max_file_size * 1024 * 1024) {
         jirafeau_async_delete($ref);
-        return "Error: file size is above upload limit";
+        return 'Error: file size is above upload limit';
     }
 
     /* Concatenate data. */
@@ -1216,7 +1240,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
             fclose($r);
             fclose($w);
             jirafeau_async_delete($ref);
-            return "Error: cannot write file";
+            return 'Error: cannot write file';
         }
     }
     fclose($r);
@@ -1246,17 +1270,34 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
   */
 function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_method)
 {
-    /* Get async infos. */
-    $a = jirafeau_get_async_ref($ref);
-    if (count($a) == 0
-        || $a['next_code'] != "$code") {
-        return "Error: bad code for ending transfer";
+    $ref = trim($ref);
+    $code = trim($code);
+
+    /* Validate ref string. */
+    if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
+        return 'Error: Malformed ref string';
     }
 
+    /* Validate code string. */
+    if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
+        return 'Error: Malformed code string';
+    }
+
+    /* Get async infos. */
+    $a = jirafeau_get_async_ref($ref);
+
+    /* Check some errors. */
+    if (count($a) == 0) {
+        return 'Error: cannot find transfer';
+    }
+
+    if (!hash_equals($a['next_code'], "$code")) {
+        return 'Error: bad code for ending transfer';
+    }
     /* Generate link infos. */
-    $p = VAR_ASYNC . s2p($ref) . $ref . "_data";
+    $p = VAR_ASYNC . s2p($ref) . $ref . '_data';
     if (!file_exists($p)) {
-        return "Error: referenced file does not exist";
+        return 'Error: referenced file does not exist';
     }
 
     /* Store filesize before encrypting the file */
@@ -1311,10 +1352,10 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
     $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
     $l = s2p("$hash_link");
     if (!@mkdir(VAR_LINKS . $l, 0755, true)) {
-        return "Error: cannot create folder in LINKS";
+        return 'Error: cannot create folder in LINKS';
     }
     if (!rename($link_tmp_name, VAR_LINKS . $l . $hash_link)) {
-        return "Error: cannot rename file in LINKS";
+        return 'Error: cannot rename file in LINKS';
     }
 
     /* Clean async upload. */
