@@ -12,9 +12,12 @@
 5. Follow the installation wizard, it should propose you the same data folder or even update automatically
 6. Check your `/lib/config.local.php` and compare it with the `/lib/config.original.php` to see if new configuration items are available. If a new item is missing in your `config.local.php`, this may trigger some errors as Jirafeau may expect to have them.
 
-## Version 4.7.x (not yet released)
+## Version 4.8.0 (not yet released)
 
+- Allow to configure file extensions disallowed from being uploaded.
+- It was possible for an unauthenticated attacker to abuse the asynchronous upload workflow to write attacker-controlled data outside the intended directory and finalize it as a real Jirafeau file/link object.
 - Download stats are written before a one-time link is deleted. The other way around would cause write attempts to a directory that was already gone.
+- Fixed downloading password-protected download using `script.php`.
 - The `time` parameter is now optional in `script.php`
 - Few little more fixes and refactoring
 - ...
