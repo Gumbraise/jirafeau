@@ -66,7 +66,7 @@ also use a [docker image](https://gitlab.com/jirafeau/Jirafeau/container_registr
 it yourself. Check [docker folder](docker/README.md) for more information.
 
 System requirements:
-- PHP >= 7.4
+- PHP >= 8.1
 - Optional, but recommended: Git >= 2.7
 - No database required, no mail required
 
