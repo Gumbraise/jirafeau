@@ -14,14 +14,16 @@
 
 ## Version 4.8.0 (not yet released)
 
-- Allow to configure file extensions disallowed from being uploaded.
-- It was possible for an unauthenticated attacker to abuse the asynchronous upload workflow to write attacker-controlled data outside the intended directory and finalize it as a real Jirafeau file/link object.
+- Allow to configure file extensions forbidden from being uploaded.
+- It was possible for an unauthenticated attacker to abuse the asynchronous upload workflow to write attacker-controlled data outside the intended directory and finalize it as a real Jirafeau file/link object. This was reported by Pedro Delgado.
 - Download stats are written before a one-time link is deleted. The other way around would cause write attempts to a directory that was already gone.
-- Fixed downloading password-protected download using `script.php`.
+- Fixed downloading password-protected files using `script.php`.
 - The `time` parameter is now optional in `script.php`
 - Few little more fixes and refactoring
-- ...
 - Upgrade from 4.7.2: in-place upgrade
+
+New configuration items:
+- `disallowed_extensions` for configuring the forbidden file extensions
 
 ## Version 4.7.2
 

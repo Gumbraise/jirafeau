@@ -84,6 +84,7 @@ This is a list of people who contributed to Jirafeau over the years. The list wa
 - omar anwar aglan
 - Oskar Fagerfjäll
 - Patrick Canterino
+- Pedro Delgado
 - Pierre-Alain Bandinelli
 - pixelbrackets
 - Poorchop

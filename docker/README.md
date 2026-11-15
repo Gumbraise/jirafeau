@@ -96,6 +96,7 @@ Available options:
 - `ONE_TIME_DOWNLOAD_PRESELECTED`: set to 1 or 0 to preselect the checkbox for one time downloads.
 - `ENABLE_CRYPT`: set to 1 or 0 to enable or disable server side encryption.
 - `DEBUG`: set to 1 or 0 to enable or disable debug mode.
+- `DEBUG_ENFORCE_CLASSIC_UPLOAD`: set to 1 or 0 to enforce the classic (synchronous) file upload mechanism.
 - `MAXIMAL_UPLOAD_SIZE`: maximal file size allowed (expressed in MB).
 - `UPLOAD_PASSWORD`: set one or more passwords to access Jirafeau (separated by comma).
 - `UPLOAD_IP`: set one or more ip allowed to upload files (separated by comma).
