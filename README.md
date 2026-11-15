@@ -7,8 +7,6 @@ Welcome to the official Jirafeau project, an [Open-Source software](https://en.w
 
 Jirafeau is a "one-click-filesharing": Select your file, upload, share a link. That's it.
 
-See [jirafeau.net](https://jirafeau.net/) for a demo.
-
 ![Screenshot1](screenshots/upload1.png)
 
 ## DISCLAMER
@@ -29,6 +27,7 @@ In this repository we are aiming to continue development of the original Jirafea
 - Option to require, check or generate file download passwords
 - Set expiration time for downloads
 - Option to self-destruct after first download
+- Option to configure forbidden file extensions
 - Shortened URLs using Base64 encoding
 - Maximal upload size configurable
 - No database, only use basic PHP
