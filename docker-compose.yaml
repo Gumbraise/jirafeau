@@ -14,6 +14,8 @@ services:
       # Passed through from .env when set. Empty values become [] (see jirafeau_parse_csv_env).
       ADMIN_IP: ${ADMIN_IP:-}
       UPLOAD_PASSWORD: ${UPLOAD_PASSWORD:-}
+      # Trusted reverse-proxy addresses (Secure cookies / client IP via X-Forwarded-*).
+      PROXY_IP: ${PROXY_IP:-}
       WEB_ROOT: ${WEB_ROOT:-}
       DEBUG: ${DEBUG:-0}
       #LANG: en
