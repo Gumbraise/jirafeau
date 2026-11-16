@@ -14,3 +14,6 @@ composer.phar
 !.gitignore
 !.dockerignore
 !.htaccess.sample
+!.env.example
+.env
+jirafeau_data/
