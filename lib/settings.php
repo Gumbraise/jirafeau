@@ -47,6 +47,19 @@ define('JIRAFEAU_VERSION', '4.8.0');
 
 define('JIRAFEAU_WEBSITE', 'https://gitlab.com/jirafeau/Jirafeau');
 
+/* Local configuration path (install/docker may define this earlier). */
+if (!defined('JIRAFEAU_CFG')) {
+    define('JIRAFEAU_CFG', JIRAFEAU_ROOT . 'lib/config.local.php');
+}
+
+/* Token sizes for newly generated secrets (hex characters). */
+if (!defined('JIRAFEAU_DELETE_CODE_LENGTH')) {
+    define('JIRAFEAU_DELETE_CODE_LENGTH', 32);
+}
+if (!defined('JIRAFEAU_ASYNC_CODE_LENGTH')) {
+    define('JIRAFEAU_ASYNC_CODE_LENGTH', 16);
+}
+
 /* Directories. */
 define('VAR_FILES', $cfg['var_root'] . 'files/');
 define('VAR_LINKS', $cfg['var_root'] . 'links/');
