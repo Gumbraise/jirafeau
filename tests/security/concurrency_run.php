@@ -122,23 +122,69 @@ jirafeau_async_release_lock($lock);
 @unlink($lock2_path);
 expect_true(!file_exists(VAR_ASYNC . s2p($ref) . $ref), 'async meta removed under held lock');
 
-echo "== Claimed orphan cleanup ==\n";
+echo "== Claim mtime + single finalization ==\n";
+$shared_hash = str_repeat('c', 32);
+@mkdir(VAR_FILES . s2p($shared_hash), 0700, true);
+file_put_contents(VAR_FILES . s2p($shared_hash) . $shared_hash, 'shared-payload');
+jirafeau_file_refcount_adjust($shared_hash, 1); // -> 1
+jirafeau_file_refcount_adjust($shared_hash, 1); // -> 2 (second logical link)
+
 $link_name = 'orphanclaim1';
 $link_path = VAR_LINKS . s2p($link_name) . $link_name;
 @mkdir(dirname($link_path), 0700, true);
-$payload_hash = str_repeat('c', 32);
-@mkdir(VAR_FILES . s2p($payload_hash), 0700, true);
-file_put_contents(VAR_FILES . s2p($payload_hash) . $payload_hash, 'payload');
-jirafeau_file_refcount_adjust($payload_hash, 1);
-$link_body = "name\nmime\n7\n\n-1\n{$payload_hash}\nO\n0\n\ncode\nO\n";
+$link_body = "name\nmime\n7\n\n-1\n{$shared_hash}\nO\n0\n\ncode\nO\n";
 file_put_contents($link_path, $link_body);
+// Simulate an old link; claim must refresh mtime so cleaners do not reap an active download.
+touch($link_path, time() - 90000);
 $claimed = jirafeau_try_claim_onetime_link($link_name);
 expect_true($claimed !== false, 'claim creates claimed file');
-// Age the claimed file beyond the 24h cleaner threshold.
-touch($claimed, time() - 90000);
+$claim_mtime = @filemtime($claimed);
+expect_true($claim_mtime !== false && (time() - $claim_mtime) < 60, 'claim stamps current mtime');
+jirafeau_admin_clean();
+expect_true(is_file($claimed), 'fresh claim is not cleaned immediately despite old original link age');
+
+$link_meta = jirafeau_get_link_from_path($claimed);
+$first_fin = jirafeau_finalize_onetime_claim($claimed, $link_meta);
+$second_fin = jirafeau_finalize_onetime_claim($claimed, $link_meta);
+expect_true($first_fin === true, 'first finalize wins');
+expect_true($second_fin === false, 'second finalize is a no-op');
+$count_after = (int) trim(@file_get_contents(VAR_FILES . s2p($shared_hash) . $shared_hash . '_count'));
+expect_eq($count_after, 1, 'double finalize does not drop shared refcount below remaining links');
+expect_true(is_file(VAR_FILES . s2p($shared_hash) . $shared_hash), 'shared payload survives single finalization');
+
+// Stale claim cleanup still works when mtime is aged after claim.
+$link_name2 = 'orphanclaim2';
+$link_path2 = VAR_LINKS . s2p($link_name2) . $link_name2;
+@mkdir(dirname($link_path2), 0700, true);
+file_put_contents($link_path2, "name\nmime\n7\n\n-1\n{$shared_hash}\nO\n0\n\ncode\nO\n");
+jirafeau_file_refcount_adjust($shared_hash, 1); // -> 2 again
+$claimed2 = jirafeau_try_claim_onetime_link($link_name2);
+touch($claimed2, time() - 90000);
 $cleaned = jirafeau_admin_clean();
 expect_true($cleaned >= 1, 'admin_clean recovers stale claimed orphans');
-expect_true(!file_exists($claimed), 'claimed orphan removed');
+expect_true(!file_exists($claimed2), 'stale claimed orphan removed');
+
+echo "== Invented async ref creates no disk artifacts ==\n";
+$fake = str_repeat('d', 32);
+$before = jirafeau_dir_size(VAR_ASYNC);
+$err = jirafeau_async_push($fake, array('error' => UPLOAD_ERR_OK, 'tmp_name' => ''), 'dead', 0);
+expect_true(strpos($err, 'cannot find transfer') !== false, 'push rejects unknown transfer');
+expect_true(!is_file(jirafeau_async_meta_path($fake)), 'no meta created for invented ref');
+expect_true(!is_file(jirafeau_async_lock_path($fake)), 'no lock created for invented ref');
+expect_true(!is_dir(VAR_ASYNC . s2p($fake)), 'no directory created for invented async ref');
+$lock_try = jirafeau_async_acquire_lock($fake);
+expect_true($lock_try === false, 'acquire_lock refuses unknown transfer');
+
+echo "== Refcount zero deletes payload under lock ==\n";
+$alone = str_repeat('e', 32);
+@mkdir(VAR_FILES . s2p($alone), 0700, true);
+$payload_alone = VAR_FILES . s2p($alone) . $alone;
+file_put_contents($payload_alone, 'alone');
+jirafeau_file_refcount_adjust($alone, 1);
+expect_true(is_file($payload_alone), 'payload exists at refcount 1');
+jirafeau_file_refcount_adjust($alone, -1);
+expect_true(!is_file($payload_alone), 'payload removed when refcount hits zero');
+expect_true(!is_file($payload_alone . '_count'), 'count file removed at zero');
 
 echo "== Auth throttle (no sleep, block before verify) ==\n";
 $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
