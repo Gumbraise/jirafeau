@@ -19,6 +19,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+if (!defined('JIRAFEAU_DELETE_CODE_LENGTH')) {
+    define('JIRAFEAU_DELETE_CODE_LENGTH', 32);
+}
+if (!defined('JIRAFEAU_ASYNC_CODE_LENGTH')) {
+    define('JIRAFEAU_ASYNC_CODE_LENGTH', 16);
+}
+
 /**
  * Transform a string in a path by separating each letters by a '/'.
  * @return path finishing with a '/'
@@ -747,7 +754,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     fclose($handle);
 
     /* Create delete code. */
-    $delete_link_code = jirafeau_gen_random(5);
+    $delete_link_code = jirafeau_gen_random(JIRAFEAU_DELETE_CODE_LENGTH);
 
     /* hash password or empty. */
     $password = jirafeau_store_download_password($key);
@@ -1272,6 +1279,9 @@ function jirafeau_async_delete($ref)
     if (file_exists(VAR_ASYNC . $p . $ref . '_data')) {
         unlink(VAR_ASYNC . $p . $ref . '_data');
     }
+    if (file_exists(VAR_ASYNC . $p . $ref . '.lock')) {
+        unlink(VAR_ASYNC . $p . $ref . '.lock');
+    }
     $parse = VAR_ASYNC . $p;
     $scan = array();
     while (file_exists($parse)
@@ -1343,66 +1353,79 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
         return "Error: cannot find transfer";
     }
 
-    /* Get async infos. */
-    $a = jirafeau_get_async_ref($ref);
-
-    /* Check some errors. */
-    if (count($a) == 0) {
-        return 'Error: cannot find transfer';
-    }
-    if (!is_string($code) || !hash_equals((string) $a['next_code'], (string) $code)) {
-        return "Error: bad transfer code";
-    }
-    if ($data['error'] != UPLOAD_ERR_OK) {
-        // Do not leak internal upload array details to clients.
-        return "Error: upload error";
-    }
-    if (empty($data['tmp_name'])) {
-        return 'Error: missing tmp_name';
-    }
-    if (!is_uploaded_file($data['tmp_name'])) {
-        return 'Error: tmp_name may not be uploaded';
-    }
-
     $p = s2p($ref);
-
-    /* File path. */
-    $r_path = $data['tmp_name'];
-    $w_path = VAR_ASYNC . $p . $ref . '_data';
-
-    /* Check that file size is not above upload limit. */
-    if ($max_file_size > 0 &&
-        filesize($r_path) + filesize($w_path) > $max_file_size * 1024 * 1024) {
-        jirafeau_async_delete($ref);
-        return 'Error: file size is above upload limit';
-    }
-
-    /* Concatenate data. */
-    $r = fopen($r_path, 'r');
-    $w = fopen($w_path, 'a');
-    while (!feof($r)) {
-        if (fwrite($w, fread($r, 1024)) === false) {
-            fclose($r);
-            fclose($w);
-            jirafeau_async_delete($ref);
-            return 'Error: cannot write file';
+    $lock_path = VAR_ASYNC . $p . $ref . '.lock';
+    $lock = @fopen($lock_path, 'c');
+    if ($lock === false || !flock($lock, LOCK_EX)) {
+        if ($lock) {
+            fclose($lock);
         }
+        return "Error: transfer busy";
     }
-    fclose($r);
-    fclose($w);
-    unlink($r_path);
 
-    /* Update async file. */
-    $code = jirafeau_gen_random(4);
-    $handle = fopen(VAR_ASYNC . $p . $ref, 'w');
-    fwrite(
-        $handle,
-        $a['file_name'] . NL. $a['mime_type'] . NL. $a['key'] . NL .
-            $a['time'] . NL . $a['onetime'] . NL . $a['ip'] . NL .
-            time() . NL . $code . NL
-    );
-    fclose($handle);
-    return $code;
+    try {
+        /* Re-read async infos under lock. */
+        $a = jirafeau_get_async_ref($ref);
+
+        /* Check some errors. */
+        if (count($a) == 0) {
+            return "Error: cannot find transfer";
+        }
+        if (!is_string($code) || !hash_equals((string) $a['next_code'], (string) $code)) {
+            return "Error: bad transfer code";
+        }
+        if ($data['error'] != UPLOAD_ERR_OK) {
+            // Do not leak internal upload array details to clients.
+            return "Error: upload error";
+        }
+        if (empty($data['tmp_name'])) {
+            return "Error: missing tmp_name";
+        }
+        if (!is_uploaded_file($data['tmp_name'])) {
+            return "Error: tmp_name may not be uploaded";
+        }
+
+        /* File path. */
+        $r_path = $data['tmp_name'];
+        $w_path = VAR_ASYNC . $p . $ref . '_data';
+
+        /* Check that file size is not above upload limit. */
+        if ($max_file_size > 0 &&
+            filesize($r_path) + filesize($w_path) > $max_file_size * 1024 * 1024) {
+            jirafeau_async_delete($ref);
+            return "Error: file size is above upload limit";
+        }
+
+        /* Concatenate data. */
+        $r = fopen($r_path, 'r');
+        $w = fopen($w_path, 'a');
+        while (!feof($r)) {
+            if (fwrite($w, fread($r, 1024)) === false) {
+                fclose($r);
+                fclose($w);
+                jirafeau_async_delete($ref);
+                return "Error: cannot write file";
+            }
+        }
+        fclose($r);
+        fclose($w);
+        unlink($r_path);
+
+        /* Update async file. */
+        $next = jirafeau_gen_random(JIRAFEAU_ASYNC_CODE_LENGTH);
+        $handle = fopen(VAR_ASYNC . $p . $ref, 'w');
+        fwrite(
+            $handle,
+            $a['file_name'] . NL. $a['mime_type'] . NL. $a['key'] . NL .
+                $a['time'] . NL . $a['onetime'] . NL . $a['ip'] . NL .
+                time() . NL . $next . NL
+        );
+        fclose($handle);
+        return $next;
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
 }
 
 /**
@@ -1467,7 +1490,7 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
 
     $hash = jirafeau_hash_file($file_hash_method, $p);
     $np = s2p($hash);
-    $delete_link_code = jirafeau_gen_random(5);
+    $delete_link_code = jirafeau_gen_random(JIRAFEAU_DELETE_CODE_LENGTH);
 
     /* File already exist ? */
     if (!file_exists(VAR_FILES . $np)) {
@@ -1965,6 +1988,140 @@ function jirafeau_dir_size($dir)
     return $size;
 }
 
+/**
+ * Parse a CSV environment value into a string array.
+ * Empty / whitespace-only values become an empty array (not array('')).
+ *
+ * @param mixed $value getenv() result or raw string
+ * @return array|null null when the variable was unset (false)
+ */
+function jirafeau_parse_csv_env($value)
+{
+    if ($value === false) {
+        return null;
+    }
+    if (!is_string($value) || trim($value) === '') {
+        return array();
+    }
+    $parts = array_map('trim', explode(',', $value));
+    return array_values(array_filter($parts, function ($part) {
+        return $part !== '';
+    }));
+}
+
+/**
+ * Atomically claim a one-time download link before streaming.
+ * @return string|false claimed path on success, false if already consumed
+ */
+function jirafeau_try_claim_onetime_link($link_name)
+{
+    if (!is_string($link_name) || !preg_match('/^[0-9a-zA-Z_-]+$/', $link_name)) {
+        return false;
+    }
+    $path = VAR_LINKS . s2p($link_name) . $link_name;
+    if (!is_file($path)) {
+        return false;
+    }
+    $claimed = $path . '.claimed-' . jirafeau_gen_random(8);
+    if (!@rename($path, $claimed)) {
+        return false;
+    }
+    return $claimed;
+}
+
+/**
+ * Finalize a claimed one-time link: remove claim file and decrement file refs.
+ */
+function jirafeau_finalize_onetime_claim($claimed_path, $link)
+{
+    if (is_string($claimed_path) && file_exists($claimed_path)) {
+        @unlink($claimed_path);
+        $parse = dirname($claimed_path);
+        while (is_dir($parse)
+               && ($scan = @scandir($parse))
+               && is_array($scan)
+               && count($scan) == 2
+               && basename($parse) != basename(VAR_LINKS)) {
+            @rmdir($parse);
+            $parse = dirname($parse);
+        }
+    }
+    if (!is_array($link) || empty($link['hash'])) {
+        return;
+    }
+    $hash = $link['hash'];
+    $p = s2p($hash);
+    $count_file = VAR_FILES . $p . $hash . '_count';
+    $fp = @fopen($count_file, file_exists($count_file) ? 'c+' : 'w+');
+    if ($fp === false) {
+        return;
+    }
+    if (!flock($fp, LOCK_EX)) {
+        fclose($fp);
+        return;
+    }
+    $raw = stream_get_contents($fp);
+    $counter = ($raw === false || trim((string) $raw) === '') ? 1 : (int) trim($raw);
+    $counter--;
+    ftruncate($fp, 0);
+    rewind($fp);
+    if ($counter >= 1) {
+        fwrite($fp, (string) $counter);
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    } else {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        @unlink($count_file);
+        jirafeau_clean_rm_file($hash);
+    }
+}
+
+/**
+ * Progressive per-IP delay after authentication failures (capped).
+ */
+function jirafeau_auth_failure_penalty($scope)
+{
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : 'unknown';
+    $base = defined('VAR_FILES') ? dirname(rtrim(VAR_FILES, '/\\')) : sys_get_temp_dir();
+    $dir = $base . DIRECTORY_SEPARATOR . 'auth_throttle';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0700, true);
+    }
+    $file = $dir . DIRECTORY_SEPARATOR . hash('sha256', $scope . '|' . $ip);
+    $now = time();
+    $window = 900;
+    $attempts = array();
+    $fp = @fopen($file, 'c+');
+    if ($fp && flock($fp, LOCK_EX)) {
+        $raw = stream_get_contents($fp);
+        if (is_string($raw) && $raw !== '') {
+            $attempts = array_map('intval', explode("\n", trim($raw)));
+        }
+        $attempts = array_values(array_filter($attempts, function ($t) use ($now, $window) {
+            return ($now - $t) < $window;
+        }));
+        $attempts[] = $now;
+        ftruncate($fp, 0);
+        rewind($fp);
+        fwrite($fp, implode("\n", $attempts));
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    } else {
+        if ($fp) {
+            fclose($fp);
+        }
+        $attempts = array($now);
+    }
+    $n = count($attempts);
+    // 1,2,4,8,16… capped so a single IP cannot hold a worker for minutes.
+    $delay = min(16, (int) pow(2, min(4, max(0, $n - 1))));
+    sleep($delay);
+    return $n;
+}
+
 function jirafeau_export_cfg($cfg)
 {
     $content = '<?php' . NL;
@@ -1973,7 +2130,10 @@ function jirafeau_export_cfg($cfg)
                'configuration items. */' . NL;
     $content .= '$cfg = ' . var_export($cfg, true) . ';';
 
-    $fileWrite = file_put_contents(JIRAFEAU_CFG, $content);
+    $cfg_path = defined('JIRAFEAU_CFG')
+        ? JIRAFEAU_CFG
+        : (defined('JIRAFEAU_ROOT') ? JIRAFEAU_ROOT . 'lib/config.local.php' : 'lib/config.local.php');
+    $fileWrite = file_put_contents($cfg_path, $content);
 
     if (false === $fileWrite) {
         jirafeau_fatal_error(t('Can not write local configuration file'));
