@@ -36,7 +36,8 @@ function env_2_cfg_string(&$cfg, $config_name, $default = null)
             $r = $default;
         }
     }
-    echo("setting $config_name to '$r'\n");
+    $log_value = (stripos($config_name, 'password') !== false) ? '[redacted]' : $r;
+    echo("setting $config_name to '$log_value'\n");
     $cfg[$config_name] = $r;
     return true;
 }
@@ -118,11 +119,11 @@ function setup_admin_password(&$cfg)
     }
     echo("setting up admin password\n");
     $p = getenv('ADMIN_PASSWORD');
-    if ($p === false) {
+    if ($p === false || $p === '') {
         $p = jirafeau_gen_random(20);
         echo("auto-generated admin password: $p\n");
     }
-    $cfg['admin_password'] = hash('sha256', $p);
+    $cfg['admin_password'] = jirafeau_hash_admin_password($p);
     return true;
 }
 

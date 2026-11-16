@@ -78,7 +78,7 @@ More details about options in `lib/config.original.php`.
 
 Available options:
 
-- `ADMIN_PASSWORD`: setup a specific admin password. If not set, a random password will be generated.
+- `ADMIN_PASSWORD`: setup a specific admin password. If not set or empty, a random password will be generated and printed once in the container logs. Prefer Compose `.env` / CI secrets — do not commit real passwords. Stored with `password_hash()` (legacy SHA-256 configs are still accepted and upgraded on login).
 - `ADMIN_IP`: set one or more ip allowed to access admin interface (separated by comma).
 - `LANG`: choose the language for jirafeau (default auto).
 - `AVAILABILITIES`: change the array for availablibilities that the user can select (see `docker-compose.yaml` for an example how to do that). Availability is the time the file should be available before it can be deleted.

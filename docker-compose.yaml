@@ -8,9 +8,14 @@ services:
     volumes:
       - ./jirafeau_data:/data
     environment:
-      ADMIN_PASSWORD: p4ssw0rd
+      # Do not commit real secrets. Set ADMIN_PASSWORD in a local .env or CI secret store.
+      # If unset, Docker generates a random password and prints it once in the container logs.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_IP: ${ADMIN_IP:-}
+      UPLOAD_PASSWORD: ${UPLOAD_PASSWORD:-}
+      WEB_ROOT: ${WEB_ROOT:-}
+      DEBUG: ${DEBUG:-0}
       #LANG: en
-      #WEB_ROOT: 'my.domain.de'
       #STYLE: 'my_jirafeau_theme'
       #DARK_STYLE: 'my_jirafeau_theme'
       AVAILABILITIES: |
@@ -27,5 +32,3 @@ services:
         }
     ports:
       - 8080:80
-
-
