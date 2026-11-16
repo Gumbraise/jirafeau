@@ -83,32 +83,29 @@ function base_16_to_64($num)
 }
 
 /**
-  * Generate a random code.
+  * Generate a cryptographically secure random hex code.
   * @param $l code length
   * @return  random code.
   */
 function jirafeau_gen_random($l)
 {
     if ($l <= 0) {
-        return 42;
+        return '0';
     }
 
-    $code = '';
-    for ($i = 0; $i < $l; $i++) {
-        $code .= dechex(rand(0, 15));
-    }
-
-    return $code;
+    $bytes = random_bytes((int) ceil($l / 2));
+    return substr(bin2hex($bytes), 0, $l);
 }
 
 function jirafeau_gen_download_pass($length, $allowed_chars)
 {
-    if ($length <= 0) {
+    if ($length <= 0 || !is_string($allowed_chars) || $allowed_chars === '') {
         return false;
     }
+    $max = strlen($allowed_chars) - 1;
     $pass = '';
     for ($i = 0; $i < $length; $i++) {
-        $pass .= $allowed_chars[rand(0, strlen($allowed_chars) - 1)];
+        $pass .= $allowed_chars[random_int(0, $max)];
     }
 
     return $pass;
@@ -123,12 +120,171 @@ function is_ssl()
         }
     } elseif (isset($_SERVER['SERVER_PORT']) && ('443' == $_SERVER['SERVER_PORT'])) {
         return true;
-    } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-        if ($_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') {
-            return true;
+    }
+
+    // Trust X-Forwarded-Proto only when the direct peer is a configured proxy.
+    global $cfg;
+    if (is_array($cfg)
+        && !empty($cfg['proxy_ip'])
+        && isset($_SERVER['REMOTE_ADDR'])
+        && isset($_SERVER['HTTP_X_FORWARDED_PROTO'])
+        && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+        foreach ($cfg['proxy_ip'] as $proxy_ip) {
+            if ($_SERVER['REMOTE_ADDR'] === $proxy_ip) {
+                return true;
+            }
         }
     }
     return false;
+}
+
+/**
+ * Configure session cookie flags before session_start().
+ */
+function jirafeau_configure_session()
+{
+    if (PHP_SAPI === 'cli' || session_status() !== PHP_SESSION_NONE) {
+        return;
+    }
+    session_set_cookie_params(array(
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => is_ssl(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ));
+}
+
+/**
+ * Send baseline security headers for HTML or file responses.
+ */
+function jirafeau_send_security_headers($html = true)
+{
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: no-referrer');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+    if ($html) {
+        // Inline scripts/handlers are still used by the UI; tighten when templates allow.
+        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
+    }
+    if (is_ssl()) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+}
+
+/**
+ * Prevent Content-Disposition / path tricks in download filenames.
+ */
+function jirafeau_sanitize_filename_for_header($filename)
+{
+    $filename = str_replace(array("\r", "\n", '"', "\0"), '', (string) $filename);
+    // Normalize separators then keep only the final path component.
+    $filename = str_replace(array('\\', '/'), DIRECTORY_SEPARATOR, $filename);
+    $filename = basename($filename);
+    if ($filename === '' || $filename === '.' || $filename === '..') {
+        $filename = 'download';
+    }
+    return $filename;
+}
+
+function jirafeau_content_disposition_header($filename, $attachment = true)
+{
+    $safe = jirafeau_sanitize_filename_for_header($filename);
+    $type = $attachment ? 'attachment' : 'inline';
+    $encoded = rawurlencode($safe);
+    header('Content-Disposition: ' . $type . '; filename="' . $safe . '"; filename*=UTF-8\'\'' . $encoded);
+}
+
+/**
+ * Reject header-injection attempts in Content-Type values from clients.
+ */
+function jirafeau_sanitize_mime_type($mime)
+{
+    $mime = trim((string) $mime);
+    if (!preg_match('/^[a-zA-Z0-9][a-zA-Z0-9!#$&\-\^_+.]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&\-\^_+.]*$/', $mime)) {
+        return 'application/octet-stream';
+    }
+    return $mime;
+}
+
+function jirafeau_is_valid_style_name($style)
+{
+    return is_string($style) && preg_match('/^[a-zA-Z0-9_-]+$/', $style);
+}
+
+function jirafeau_is_valid_async_ref($ref)
+{
+    return is_string($ref) && preg_match('/^[0-9a-f]{8,64}$/', $ref);
+}
+
+/**
+ * Hash an admin password with a modern password_hash algorithm.
+ */
+function jirafeau_hash_admin_password($password)
+{
+    return password_hash($password, PASSWORD_DEFAULT);
+}
+
+/**
+ * Verify admin password. Supports password_hash and legacy unsalted SHA-256 hex.
+ */
+function jirafeau_verify_admin_password($password, $stored)
+{
+    if (!is_string($password) || !is_string($stored) || $stored === '') {
+        return false;
+    }
+    if (isset($stored[0]) && $stored[0] === '$') {
+        return password_verify($password, $stored);
+    }
+    if (strlen($stored) === 64 && ctype_xdigit($stored)) {
+        return hash_equals(strtolower($stored), hash('sha256', $password));
+    }
+    return false;
+}
+
+function jirafeau_admin_password_needs_rehash($stored)
+{
+    if (!is_string($stored) || $stored === '') {
+        return false;
+    }
+    if (isset($stored[0]) && $stored[0] === '$') {
+        return password_needs_rehash($stored, PASSWORD_DEFAULT);
+    }
+    // Legacy SHA-256 storage must be upgraded after a successful login.
+    return true;
+}
+
+/**
+ * Store a download password. New entries use password_hash; verification stays backward compatible.
+ */
+function jirafeau_store_download_password($key)
+{
+    if ($key === null || $key === '') {
+        return '';
+    }
+    return '[PASSWORD]' . password_hash($key, PASSWORD_DEFAULT);
+}
+
+/**
+ * Verify a download password against stored link metadata.
+ */
+function jirafeau_verify_download_password($provided, $stored)
+{
+    if ($stored === null || $stored === '') {
+        return true;
+    }
+    if (!is_string($provided)) {
+        return false;
+    }
+    if (strpos($stored, '[PASSWORD]') === 0) {
+        return password_verify($provided, substr($stored, 10));
+    }
+    if (strpos($stored, '[SHA256]') === 0) {
+        return hash_equals(substr($stored, 8), hash('sha256', $provided));
+    }
+    // Legacy bare MD5 hashes.
+    return hash_equals($stored, md5($provided));
 }
 
 function jirafeau_human_size($octets)
@@ -557,7 +713,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     /* file information */
     $hash = jirafeau_hash_file($file_hash_method, $file['tmp_name']);
     $name = str_replace(NL, '', trim($file['name']));
-    $mime_type = $file['type'];
+    $mime_type = jirafeau_sanitize_mime_type($file['type']);
     $size = $file['size'];
 
     /* does file already exist ? */
@@ -594,10 +750,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     $delete_link_code = jirafeau_gen_random(5);
 
     /* hash password or empty. */
-    $password = '';
-    if (!empty($key)) {
-        $password = '[SHA256]' . hash('sha256', $key);
-    }
+    $password = jirafeau_store_download_password($key);
 
     /* create link file */
     $link_tmp_name =  VAR_LINKS . $hash . rand(0, 10000) . '.tmp';
@@ -765,6 +918,9 @@ function check_errors($cfg)
 function jirafeau_get_link($hash)
 {
     $out = array();
+    if (!is_string($hash) || !preg_match('/^[0-9a-zA-Z_-]+$/', $hash)) {
+        return $out;
+    }
     $link = VAR_LINKS . s2p("$hash") . $hash;
 
     if (!file_exists($link)) {
@@ -814,7 +970,7 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     }
 
                     /* Filter. */
-                    if (!empty($name) && !@preg_match("/$name/i", jirafeau_escape($l['file_name']))) {
+                    if (!empty($name) && !@preg_match('/' . preg_quote($name, '/') . '/i', $l['file_name'])) {
                         continue;
                     }
                     if (!empty($file_hash) && $file_hash != $l['hash']) {
@@ -1106,6 +1262,9 @@ function jirafeau_get_async_ref($ref)
  */
 function jirafeau_async_delete($ref)
 {
+    if (!jirafeau_is_valid_async_ref($ref)) {
+        return;
+    }
     $p = s2p("$ref");
     if (file_exists(VAR_ASYNC . $p . $ref)) {
         unlink(VAR_ASYNC . $p . $ref);
@@ -1152,11 +1311,8 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
     $w_path = $p . $ref . '_data';
     touch($w_path);
 
-    /* sha256 password or empty */
-    $password = '';
-    if (!empty($key)) {
-        $password = '[SHA256]' . hash('sha256', $key);
-    }
+    /* hashed download password or empty */
+    $password = jirafeau_store_download_password($key);
 
     /* Store information. */
     $p .= $ref;
@@ -1164,7 +1320,7 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
     fwrite(
         $handle,
         str_replace(NL, '', trim($filename)) . NL .
-            str_replace(NL, '', trim($type)) . NL . $password . NL .
+            jirafeau_sanitize_mime_type(str_replace(NL, '', trim($type))) . NL . $password . NL .
             $time . NL . ($one_time ? 'O' : 'R') . NL . $ip . NL .
             time() . NL . $code . NL
     );
@@ -1183,17 +1339,8 @@ function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
   */
 function jirafeau_async_push($ref, $data, $code, $max_file_size)
 {
-    $ref = trim($ref);
-    $code = trim($code);
-
-    /* Validate ref string. */
-    if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
-        return 'Error: Malformed ref string';
-    }
-
-    /* Validate code string. */
-    if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
-        return 'Error: Malformed code string';
+    if (!jirafeau_is_valid_async_ref($ref)) {
+        return "Error: cannot find transfer";
     }
 
     /* Get async infos. */
@@ -1203,14 +1350,12 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
     if (count($a) == 0) {
         return 'Error: cannot find transfer';
     }
-
-    if (!hash_equals($a['next_code'], "$code")) {
-        return 'Error: bad transfer code';
+    if (!is_string($code) || !hash_equals((string) $a['next_code'], (string) $code)) {
+        return "Error: bad transfer code";
     }
     if ($data['error'] != UPLOAD_ERR_OK) {
-        // Check error code in https://www.php.net/manual/en/features.file-upload.errors.php
-        $data_details = print_r($data, true);
-        return "Error: upload error: {$data_details}";
+        // Do not leak internal upload array details to clients.
+        return "Error: upload error";
     }
     if (empty($data['tmp_name'])) {
         return 'Error: missing tmp_name';
@@ -1270,12 +1415,16 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
   */
 function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_method)
 {
-    $ref = trim($ref);
-    $code = trim($code);
+    if (!jirafeau_is_valid_async_ref($ref)) {
+        return "Error: bad code for ending transfer";
+    }
 
-    /* Validate ref string. */
-    if (!ctype_xdigit($ref) || strlen($ref) != JIRAFEAU_ASYNC_REF_LENGTH) {
-        return 'Error: Malformed ref string';
+    /* Get async infos. */
+    $a = jirafeau_get_async_ref($ref);
+    if (count($a) == 0
+        || !is_string($code)
+        || !hash_equals((string) $a['next_code'], (string) $code)) {
+        return "Error: bad code for ending transfer";
     }
 
     /* Validate code string. */
@@ -1514,8 +1663,11 @@ function jirafeau_challenge_upload_password($cfg, $password)
     if (!jirafeau_has_upload_password($cfg)) {
         return false;
     }
+    if (!is_string($password)) {
+        return false;
+    }
     foreach ($cfg['upload_password'] as $p) {
-        if ($password == $p) {
+        if (is_string($p) && hash_equals($p, $password)) {
             return true;
         }
     }
@@ -1736,28 +1888,61 @@ function jirafeau_escape($string)
 
 function jirafeau_admin_session_start()
 {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(true);
+    }
     $_SESSION['admin_auth'] = true;
-    $_SESSION['admin_csrf'] = hash('sha256', uniqid(mt_rand(), true));
+    $_SESSION['admin_csrf'] = bin2hex(random_bytes(32));
 }
 
 function jirafeau_session_end()
 {
     $_SESSION = array();
-    session_destroy();
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'] ?? '', !empty($params['secure']), !empty($params['httponly']));
+        session_destroy();
+    }
 }
 
+function jirafeau_admin_is_authenticated()
+{
+    return isset($_SESSION['admin_auth']) && $_SESSION['admin_auth'] === true;
+}
+
+function jirafeau_admin_csrf_valid()
+{
+    return isset($_SESSION['admin_csrf'])
+        && isset($_POST['admin_csrf'])
+        && is_string($_POST['admin_csrf'])
+        && hash_equals($_SESSION['admin_csrf'], $_POST['admin_csrf']);
+}
+
+/**
+ * Backward-compatible name: authenticated admin with a valid CSRF token on POST.
+ */
 function jirafeau_admin_session_logged()
 {
-    return isset($_SESSION['admin_auth']) &&
-           isset($_SESSION['admin_csrf']) &&
-           isset($_POST['admin_csrf']) &&
-           $_SESSION['admin_auth'] === true &&
-           $_SESSION['admin_csrf'] === $_POST['admin_csrf'];
+    return jirafeau_admin_is_authenticated() && jirafeau_admin_csrf_valid();
 }
 
 function jirafeau_admin_csrf_field()
 {
-    return "<input type='hidden' name='admin_csrf' value='". $_SESSION['admin_csrf'] . "'/>";
+    if (!isset($_SESSION['admin_csrf'])) {
+        $_SESSION['admin_csrf'] = bin2hex(random_bytes(32));
+    }
+    return "<input type='hidden' name='admin_csrf' value='" . jirafeau_escape($_SESSION['admin_csrf']) . "'/>";
+}
+
+function jirafeau_admin_require_csrf_or_exit()
+{
+    if (!jirafeau_admin_csrf_valid()) {
+        http_response_code(403);
+        require(JIRAFEAU_ROOT . 'lib/template/header.php');
+        jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $GLOBALS['cfg'], 'denied', false);
+        require(JIRAFEAU_ROOT . 'lib/template/footer.php');
+        exit;
+    }
 }
 
 function jirafeau_user_session_start()

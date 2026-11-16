@@ -103,8 +103,11 @@ $cfg['upload_ip_nopassword'] = array();
 
 /* Password for the admin interface.
  * An empty password will disable password authentication.
- * The password is a sha256 hash of the original version.
- * Example: echo -n "myVerySecretAdminPassword" | sha256sum
+ * Preferred format: password_hash() / PASSWORD_DEFAULT (bcrypt/argon2).
+ * Legacy format still accepted: lowercase SHA-256 hex of the password
+ * (echo -n "secret" | sha256sum). On successful login, legacy hashes are
+ * automatically re-hashed with password_hash() into config.local.php.
+ * Example (modern): php -r "echo password_hash('secret', PASSWORD_DEFAULT), PHP_EOL;"
  */
 $cfg['admin_password'] = '';
 
