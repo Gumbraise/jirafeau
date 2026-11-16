@@ -531,7 +531,8 @@ function jirafeau_delete_link($link)
 
 /**
  * Atomically adjust a stored file reference counter under an exclusive lock.
- * When the counter reaches 0, the file payload is removed.
+ * When the counter reaches 0, the payload is removed while the lock is still held
+ * so a concurrent deduplicated upload cannot revive a half-deleted file.
  *
  * @return int|false new counter value, or false on lock/IO failure
  */
@@ -541,7 +542,8 @@ function jirafeau_file_refcount_adjust($hash, $delta)
         return false;
     }
     $p = s2p($hash);
-    $count_file = VAR_FILES . $p . $hash . '_count';
+    $payload = VAR_FILES . $p . $hash;
+    $count_file = $payload . '_count';
     $dir = dirname($count_file);
     if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
         return false;
@@ -568,10 +570,22 @@ function jirafeau_file_refcount_adjust($hash, $delta)
         flock($fp, LOCK_UN);
         fclose($fp);
     } else {
+        // Keep LOCK_EX until payload is gone to close the TOCTOU window.
+        if (is_file($payload)) {
+            @unlink($payload);
+        }
         flock($fp, LOCK_UN);
         fclose($fp);
         @unlink($count_file);
-        jirafeau_clean_rm_file($hash);
+        $parse = VAR_FILES . $p;
+        while (is_dir($parse)
+               && ($scan = @scandir($parse))
+               && is_array($scan)
+               && count($scan) == 2
+               && basename($parse) != basename(VAR_FILES)) {
+            @rmdir($parse);
+            $parse = dirname($parse);
+        }
     }
     return $counter;
 }
@@ -1115,7 +1129,24 @@ function jirafeau_admin_clean()
                 $stack[] = $d . $node . '/';
             } elseif (is_file($d . $node)) {
                 $full = $d . $node;
-                /* Recover interrupted one-time downloads left as .claimed-* orphans. */
+                /* Crash mid-finalize: decrement not yet done (no .done suffix). */
+                if (preg_match('/\.finishing-[0-9a-f]+\.done$/', $node)) {
+                    @unlink($full);
+                    jirafeau_cleanup_link_dirs($d);
+                    $count++;
+                    continue;
+                }
+                if (preg_match('/\.finishing-[0-9a-f]+$/', $node)) {
+                    $mtime = @filemtime($full);
+                    if ($mtime !== false && (time() - $mtime) > 3600) {
+                        $l = jirafeau_get_link_from_path($full);
+                        jirafeau_finalize_onetime_claim($full, $l);
+                        $count++;
+                    }
+                    continue;
+                }
+                /* Recover interrupted one-time downloads left as .claimed-* orphans.
+                 * mtime is stamped at claim time (not original link age). */
                 if (jirafeau_claimed_link_name($node) !== false) {
                     $mtime = @filemtime($full);
                     // 24h keeps long downloads safe; shutdown handlers clean sooner.
@@ -1173,6 +1204,17 @@ function jirafeau_admin_clean_async()
                 /* Push new found directory. */
                 $stack[] = $d . $node . '/';
             } elseif (is_file($d . $node)) {
+                /* Stray locks left without a transfer meta file. */
+                if (preg_match('/^([0-9a-f]{8,64})\.lock$/', $node, $m)) {
+                    if (!is_file(jirafeau_async_meta_path($m[1]))) {
+                        @unlink($d . $node);
+                        $count++;
+                    }
+                    continue;
+                }
+                if (preg_match('/_data$/', $node) || preg_match('/\.lock$/', $node)) {
+                    continue;
+                }
                 /* Read async information. */
                 $a = jirafeau_get_async_ref(basename($node));
                 if (!count($a)) {
@@ -1325,6 +1367,14 @@ function jirafeau_get_async_ref($ref)
 }
 
 /**
+ * Path of the per-transfer async metadata file.
+ */
+function jirafeau_async_meta_path($ref)
+{
+    return VAR_ASYNC . s2p($ref) . $ref;
+}
+
+/**
  * Path of the per-transfer async lock file.
  */
 function jirafeau_async_lock_path($ref)
@@ -1333,7 +1383,8 @@ function jirafeau_async_lock_path($ref)
 }
 
 /**
- * Acquire the exclusive async lock for a transfer.
+ * Acquire the exclusive async lock for an *existing* transfer.
+ * Never creates directories for unknown references (avoids disk fill via invented refs).
  * @return resource|false
  */
 function jirafeau_async_acquire_lock($ref)
@@ -1341,16 +1392,26 @@ function jirafeau_async_acquire_lock($ref)
     if (!jirafeau_is_valid_async_ref($ref)) {
         return false;
     }
-    $dir = dirname(jirafeau_async_lock_path($ref));
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+    $meta = jirafeau_async_meta_path($ref);
+    $lock_path = jirafeau_async_lock_path($ref);
+    $dir = dirname($lock_path);
+    // Transfer must already exist; do not mkdir for speculative refs.
+    if (!is_file($meta) || !is_dir($dir)) {
         return false;
     }
-    $lock = @fopen(jirafeau_async_lock_path($ref), 'c');
+    $lock = @fopen($lock_path, 'c');
     if ($lock === false) {
         return false;
     }
     if (!flock($lock, LOCK_EX)) {
         fclose($lock);
+        return false;
+    }
+    // Re-check under lock: transfer may have been deleted concurrently.
+    if (!is_file($meta)) {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        @unlink($lock_path);
         return false;
     }
     return $lock;
@@ -1470,11 +1531,16 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
     if (!jirafeau_is_valid_async_ref($ref)) {
         return "Error: cannot find transfer";
     }
+    if (!is_file(jirafeau_async_meta_path($ref))) {
+        return "Error: cannot find transfer";
+    }
 
     $p = s2p($ref);
     $lock = jirafeau_async_acquire_lock($ref);
     if ($lock === false) {
-        return "Error: transfer busy";
+        return is_file(jirafeau_async_meta_path($ref))
+            ? "Error: transfer busy"
+            : "Error: cannot find transfer";
     }
 
     try {
@@ -1554,10 +1620,15 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
     if (!jirafeau_is_valid_async_ref($ref)) {
         return "Error: bad code for ending transfer";
     }
+    if (!is_file(jirafeau_async_meta_path($ref))) {
+        return "Error: bad code for ending transfer";
+    }
 
     $lock = jirafeau_async_acquire_lock($ref);
     if ($lock === false) {
-        return "Error: transfer busy";
+        return is_file(jirafeau_async_meta_path($ref))
+            ? "Error: transfer busy"
+            : "Error: bad code for ending transfer";
     }
 
     try {
@@ -2116,6 +2187,7 @@ function jirafeau_parse_csv_env($value)
 
 /**
  * Atomically claim a one-time download link before streaming.
+ * Refreshes mtime so cleaners use the claim time, not the original link age.
  * @return string|false claimed path on success, false if already consumed
  */
 function jirafeau_try_claim_onetime_link($link_name)
@@ -2131,30 +2203,68 @@ function jirafeau_try_claim_onetime_link($link_name)
     if (!@rename($path, $claimed)) {
         return false;
     }
+    // rename() preserves mtime on many systems; stamp the reservation now.
+    @touch($claimed);
     return $claimed;
 }
 
 /**
- * Finalize a claimed one-time link: remove claim file and decrement file refs.
+ * Remove empty parent directories under VAR_LINKS after claim finalization.
+ */
+function jirafeau_cleanup_link_dirs($start_dir)
+{
+    $parse = $start_dir;
+    while (is_dir($parse)
+           && ($scan = @scandir($parse))
+           && is_array($scan)
+           && count($scan) == 2
+           && basename($parse) != basename(VAR_LINKS)) {
+        @rmdir($parse);
+        $parse = dirname($parse);
+    }
+}
+
+/**
+ * Finalize a claimed one-time link exactly once across processes.
+ * Only the winner of the claimed→finishing rename may decrement the refcount.
+ * After decrement, the file is renamed to *.done so cleaners never decrement twice.
+ *
+ * @return bool true when this caller performed finalization
  */
 function jirafeau_finalize_onetime_claim($claimed_path, $link)
 {
-    if (is_string($claimed_path) && file_exists($claimed_path)) {
+    if (!is_string($claimed_path) || $claimed_path === '') {
+        return false;
+    }
+    // Accept either the active claim or a crash mid-finalize finishing file.
+    $basename = basename($claimed_path);
+    if (preg_match('/\.finishing-[0-9a-f]+\.done$/', $basename)) {
         @unlink($claimed_path);
-        $parse = dirname($claimed_path);
-        while (is_dir($parse)
-               && ($scan = @scandir($parse))
-               && is_array($scan)
-               && count($scan) == 2
-               && basename($parse) != basename(VAR_LINKS)) {
-            @rmdir($parse);
-            $parse = dirname($parse);
+        jirafeau_cleanup_link_dirs(dirname($claimed_path));
+        return false;
+    }
+
+    $finishing = $claimed_path;
+    if (jirafeau_claimed_link_name($basename) !== false) {
+        if (!is_file($claimed_path)) {
+            return false;
         }
+        $finishing = $claimed_path . '.finishing-' . jirafeau_gen_random(4);
+        if (!@rename($claimed_path, $finishing)) {
+            return false;
+        }
+    } elseif (!preg_match('/\.finishing-[0-9a-f]+$/', $basename) || !is_file($claimed_path)) {
+        return false;
     }
-    if (!is_array($link) || empty($link['hash'])) {
-        return;
+
+    if (is_array($link) && !empty($link['hash'])) {
+        jirafeau_file_refcount_adjust($link['hash'], -1);
     }
-    jirafeau_file_refcount_adjust($link['hash'], -1);
+    $done = $finishing . '.done';
+    @rename($finishing, $done);
+    @unlink($done);
+    jirafeau_cleanup_link_dirs(dirname($claimed_path));
+    return true;
 }
 
 /**
