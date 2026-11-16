@@ -171,15 +171,24 @@ if (!empty($link['key'])) {
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
         exit;
     } else {
+        $auth_scope = 'download_password:' . $link_name;
+        $retry_href = 'f.php?h=' . urlencode($link_name);
+        if (!empty($crypt_key)) {
+            $retry_href .= '&k=' . urlencode($crypt_key);
+        }
+        if (jirafeau_auth_is_blocked($auth_scope, $cfg)) {
+            http_response_code(429);
+            require(JIRAFEAU_ROOT.'lib/template/header.php');
+            jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $cfg, 'denied', false, $retry_href);
+            require(JIRAFEAU_ROOT.'lib/template/footer.php');
+            exit;
+        }
         $posted_key = is_string($_POST['key']) ? $_POST['key'] : '';
         if (jirafeau_verify_download_password($posted_key, $link['key'])) {
+            jirafeau_auth_clear_failures($auth_scope, $cfg);
             $password_challenged = true;
         } else {
-            jirafeau_auth_failure_penalty('download_password:' . $link_name);
-            $retry_href = 'f.php?h=' . urlencode($link_name);
-            if (!empty($crypt_key)) {
-                $retry_href .= '&k=' . urlencode($crypt_key);
-            }
+            jirafeau_auth_register_failure($auth_scope, $cfg);
             require(JIRAFEAU_ROOT.'lib/template/header.php');
             echo '<div class="error"><p>' . t('ACCESS_KO') .
             '</p></div>';
@@ -232,6 +241,7 @@ if (!$password_challenged && !$do_download && !$do_preview) {
 
 /* Claim one-time links before any bytes are sent to close the race window. */
 $onetime_claim = false;
+$onetime_finalized = false;
 if ($link['onetime'] == 'O') {
     $onetime_claim = jirafeau_try_claim_onetime_link($link_name);
     if ($onetime_claim === false) {
@@ -240,6 +250,12 @@ if ($link['onetime'] == 'O') {
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
         exit;
     }
+    register_shutdown_function(function () use (&$onetime_claim, &$onetime_finalized, $link) {
+        if ($onetime_claim !== false && !$onetime_finalized) {
+            jirafeau_finalize_onetime_claim($onetime_claim, $link);
+            $onetime_finalized = true;
+        }
+    });
 }
 
 header('HTTP/1.0 200 OK');
@@ -292,6 +308,7 @@ else {
 
 if ($onetime_claim !== false) {
     jirafeau_finalize_onetime_claim($onetime_claim, $link);
+    $onetime_finalized = true;
 }
 
 exit;

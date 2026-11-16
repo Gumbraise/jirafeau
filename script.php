@@ -192,10 +192,19 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         echo 'Error 9';
         exit;
     }
-    if (strlen($link['key']) > 0 && !jirafeau_verify_download_password($key, $link['key'])) {
-        jirafeau_auth_failure_penalty('api_download_password:' . $link_name);
-        echo 'Error 10';
-        exit;
+    if (strlen($link['key']) > 0) {
+        $auth_scope = 'api_download_password:' . $link_name;
+        if (jirafeau_auth_is_blocked($auth_scope, $cfg)) {
+            http_response_code(429);
+            echo 'Error 10';
+            exit;
+        }
+        if (!jirafeau_verify_download_password($key, $link['key'])) {
+            jirafeau_auth_register_failure($auth_scope, $cfg);
+            echo 'Error 10';
+            exit;
+        }
+        jirafeau_auth_clear_failures($auth_scope, $cfg);
     }
     $p = s2p($link['hash']);
     if (!file_exists(VAR_FILES . $p . $link['hash'])) {
@@ -204,12 +213,19 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     }
 
     $onetime_claim = false;
+    $onetime_finalized = false;
     if ($link['onetime'] == 'O') {
         $onetime_claim = jirafeau_try_claim_onetime_link($link_name);
         if ($onetime_claim === false) {
             echo 'Error 8';
             exit;
         }
+        register_shutdown_function(function () use (&$onetime_claim, &$onetime_finalized, $link) {
+            if ($onetime_claim !== false && !$onetime_finalized) {
+                jirafeau_finalize_onetime_claim($onetime_claim, $link);
+                $onetime_finalized = true;
+            }
+        });
     }
 
     /* Read file. */
@@ -226,6 +242,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
 
     if ($onetime_claim !== false) {
         jirafeau_finalize_onetime_claim($onetime_claim, $link);
+        $onetime_finalized = true;
     }
     exit;
 } elseif (isset($_GET['get_capacity'])) {

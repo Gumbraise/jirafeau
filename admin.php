@@ -83,7 +83,15 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
         }
         /* Test web password authentication. */
         if (!$authed && !empty($cfg['admin_password']) && isset($_POST['admin_password']) && is_string($_POST['admin_password'])) {
+            if (jirafeau_auth_is_blocked('admin_login', $cfg)) {
+                http_response_code(429);
+                require(JIRAFEAU_ROOT . 'lib/template/header.php');
+                jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $cfg, 'denied', false);
+                require(JIRAFEAU_ROOT.'lib/template/footer.php');
+                exit;
+            }
             if (jirafeau_verify_admin_password($_POST['admin_password'], $cfg['admin_password'])) {
+                jirafeau_auth_clear_failures('admin_login', $cfg);
                 if (jirafeau_admin_password_needs_rehash($cfg['admin_password'])) {
                     $cfg['admin_password'] = jirafeau_hash_admin_password($_POST['admin_password']);
                     jirafeau_export_cfg($cfg);
@@ -91,7 +99,7 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
                 jirafeau_admin_session_start();
                 $authed = true;
             } else {
-                jirafeau_auth_failure_penalty('admin_login');
+                jirafeau_auth_register_failure('admin_login', $cfg);
                 require(JIRAFEAU_ROOT . 'lib/template/header.php');
                 echo '<div class="error"><p>'. t('BAD_PSW') . '</p></div>';
                 require(JIRAFEAU_ROOT.'lib/template/footer.php');
