@@ -9,10 +9,10 @@ services:
       - ./jirafeau_data:/data
     environment:
       # Do not commit real secrets. Set ADMIN_PASSWORD in a local .env or CI secret store.
-      # If unset, Docker generates a random password and prints it once in the container logs.
+      # If unset/empty, Docker generates a random password and prints it once in the logs.
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      ADMIN_IP: ${ADMIN_IP:-}
-      UPLOAD_PASSWORD: ${UPLOAD_PASSWORD:-}
+      # Leave ADMIN_IP / UPLOAD_PASSWORD unset unless configured in .env.
+      # Empty strings would otherwise be misread as restrictive/allow-empty values.
       WEB_ROOT: ${WEB_ROOT:-}
       DEBUG: ${DEBUG:-0}
       #LANG: en

@@ -85,10 +85,14 @@ function env_2_cfg_string_array(&$cfg, $config_name)
     if ($r === false) {
         return;
     }
-    $r = explode(",", $r);
-    $c = count($r);
-    echo("setting $config_name array with $c value(s)n\n");
-    $cfg[$config_name] = $r;
+    // Empty env (Compose ${VAR:-}) must become [] — not [''], which breaks IP/password checks.
+    $parsed = jirafeau_parse_csv_env($r);
+    if ($parsed === null) {
+        return;
+    }
+    $c = count($parsed);
+    echo("setting $config_name array with $c value(s)\n");
+    $cfg[$config_name] = $parsed;
     return true;
 }
 
