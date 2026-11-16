@@ -91,7 +91,7 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
                 jirafeau_admin_session_start();
                 $authed = true;
             } else {
-                sleep(2);
+                jirafeau_auth_failure_penalty('admin_login');
                 require(JIRAFEAU_ROOT . 'lib/template/header.php');
                 echo '<div class="error"><p>'. t('BAD_PSW') . '</p></div>';
                 require(JIRAFEAU_ROOT.'lib/template/footer.php');

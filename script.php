@@ -193,7 +193,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         exit;
     }
     if (strlen($link['key']) > 0 && !jirafeau_verify_download_password($key, $link['key'])) {
-        sleep(2);
+        jirafeau_auth_failure_penalty('api_download_password:' . $link_name);
         echo 'Error 10';
         exit;
     }
@@ -201,6 +201,15 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     if (!file_exists(VAR_FILES . $p . $link['hash'])) {
         echo 'Error 11';
         exit;
+    }
+
+    $onetime_claim = false;
+    if ($link['onetime'] == 'O') {
+        $onetime_claim = jirafeau_try_claim_onetime_link($link_name);
+        if ($onetime_claim === false) {
+            echo 'Error 8';
+            exit;
+        }
     }
 
     /* Read file. */
@@ -215,8 +224,8 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     }
     fclose($r);
 
-    if ($link['onetime'] == 'O') {
-        jirafeau_delete_link($link_name);
+    if ($onetime_claim !== false) {
+        jirafeau_finalize_onetime_claim($onetime_claim, $link);
     }
     exit;
 } elseif (isset($_GET['get_capacity'])) {

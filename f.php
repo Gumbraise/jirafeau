@@ -175,7 +175,11 @@ if (!empty($link['key'])) {
         if (jirafeau_verify_download_password($posted_key, $link['key'])) {
             $password_challenged = true;
         } else {
-            sleep(2);
+            jirafeau_auth_failure_penalty('download_password:' . $link_name);
+            $retry_href = 'f.php?h=' . urlencode($link_name);
+            if (!empty($crypt_key)) {
+                $retry_href .= '&k=' . urlencode($crypt_key);
+            }
             require(JIRAFEAU_ROOT.'lib/template/header.php');
             echo '<div class="error"><p>' . t('ACCESS_KO') .
             '</p></div>';
@@ -226,6 +230,18 @@ if (!$password_challenged && !$do_download && !$do_preview) {
     exit;
 }
 
+/* Claim one-time links before any bytes are sent to close the race window. */
+$onetime_claim = false;
+if ($link['onetime'] == 'O') {
+    $onetime_claim = jirafeau_try_claim_onetime_link($link_name);
+    if ($onetime_claim === false) {
+        require(JIRAFEAU_ROOT.'lib/template/header.php');
+        jirafeau_show_page_error('FILE_NOT_AVAIL', 'FILE_NOT_AVAIL_BODY', $cfg);
+        require(JIRAFEAU_ROOT.'lib/template/footer.php');
+        exit;
+    }
+}
+
 header('HTTP/1.0 200 OK');
 jirafeau_send_security_headers(false);
 header('Content-Length: ' . $link['file_size']);
@@ -274,10 +290,8 @@ else {
     }
 }
 
-jirafeau_write_download_stats($link_name, get_ip_address($cfg));
-
-if ($link['onetime'] == 'O') {
-    jirafeau_delete_link($link_name);
+if ($onetime_claim !== false) {
+    jirafeau_finalize_onetime_claim($onetime_claim, $link);
 }
 
 exit;
