@@ -184,7 +184,8 @@ jirafeau_file_refcount_adjust($alone, 1);
 expect_true(is_file($payload_alone), 'payload exists at refcount 1');
 jirafeau_file_refcount_adjust($alone, -1);
 expect_true(!is_file($payload_alone), 'payload removed when refcount hits zero');
-expect_true(!is_file($payload_alone . '_count'), 'count file removed at zero');
+expect_true(!is_file(jirafeau_file_count_path($alone)), 'count file removed at zero');
+expect_true(is_file(jirafeau_file_lock_path($alone)), 'stable lock file kept after counter hits zero');
 
 echo "== Upload/delete interleave cannot create counter without file ==\n";
 $race = str_repeat('f', 32);
@@ -197,6 +198,7 @@ file_put_contents($src, 'replacement-not-used-on-dedup');
 // Simulate delete winning first under the same locking API used in production.
 jirafeau_file_refcount_adjust($race, -1);
 expect_true(!is_file($race_payload), 'delete removed payload');
+expect_true(is_file(jirafeau_file_lock_path($race)), 'lock survives delete-to-zero');
 // Concurrent-style commit must reinstall payload before incrementing.
 $new_count = jirafeau_file_commit_payload($race, $src, 'rename');
 expect_eq($new_count, 1, 'commit after delete restores refcount to 1');
@@ -209,6 +211,107 @@ file_put_contents($src2, 'dedup-src');
 expect_eq(jirafeau_file_commit_payload($race, $src2, 'rename'), 2, 'dedup commit increments');
 expect_true(is_file($race_payload), 'dedup keeps existing payload');
 expect_true(!is_file($src2), 'dedup drops spare source');
+
+echo "== Real concurrent delete vs upload at counter zero ==\n";
+$cz = str_repeat('7', 32);
+$cz_payload = VAR_FILES . s2p($cz) . $cz;
+$deleter = <<<'PHP'
+<?php
+define('JIRAFEAU_ROOT', getenv('JF_ROOT'));
+$var_root = getenv('JF_VAR');
+define('VAR_FILES', $var_root . 'files/');
+define('VAR_LINKS', $var_root . 'links/');
+define('VAR_ASYNC', $var_root . 'async/');
+define('NL', "\n");
+require JIRAFEAU_ROOT . 'lib/functions.php';
+$hash = getenv('JF_HASH');
+$gate = getenv('JF_GATE');
+while (!is_file($gate)) {
+    usleep(1000);
+}
+jirafeau_file_refcount_adjust($hash, -1);
+PHP;
+$uploader = <<<'PHP'
+<?php
+define('JIRAFEAU_ROOT', getenv('JF_ROOT'));
+$var_root = getenv('JF_VAR');
+define('VAR_FILES', $var_root . 'files/');
+define('VAR_LINKS', $var_root . 'links/');
+define('VAR_ASYNC', $var_root . 'async/');
+define('NL', "\n");
+require JIRAFEAU_ROOT . 'lib/functions.php';
+$hash = getenv('JF_HASH');
+$gate = getenv('JF_GATE');
+$src = getenv('JF_SRC');
+while (!is_file($gate)) {
+    usleep(1000);
+}
+file_put_contents($src, 'concurrent-upload-' . getmypid());
+$n = jirafeau_file_commit_payload($hash, $src, 'rename');
+file_put_contents(getenv('JF_OUT'), (string) $n);
+PHP;
+$deleter_file = $var_root . 'deleter.php';
+$uploader_file = $var_root . 'uploader.php';
+file_put_contents($deleter_file, $deleter);
+file_put_contents($uploader_file, $uploader);
+$cz_ok = true;
+for ($round = 0; $round < 40; $round++) {
+    @mkdir(dirname($cz_payload), 0700, true);
+    file_put_contents($cz_payload, 'seed-' . $round);
+    // Ensure clean counter via locked adjust.
+    $fpz = jirafeau_file_refcount_lock($cz);
+    if ($fpz) {
+        jirafeau_file_refcount_write_unlocked($cz, 1);
+        flock($fpz, LOCK_UN);
+        fclose($fpz);
+    }
+    $gate = $var_root . 'gate-' . $round;
+    $src_r = $var_root . 'cz-src-' . $round . '.bin';
+    $out_r = $var_root . 'cz-out-' . $round . '.txt';
+    @unlink($gate);
+    @unlink($src_r);
+    @unlink($out_r);
+    $env_r = array(
+        'JF_ROOT' => JIRAFEAU_ROOT,
+        'JF_VAR' => $var_root,
+        'JF_HASH' => $cz,
+        'JF_GATE' => $gate,
+        'JF_SRC' => $src_r,
+        'JF_OUT' => $out_r,
+    ) + $_ENV;
+    $desc = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
+    $p_del = proc_open(PHP_BINARY . ' ' . escapeshellarg($deleter_file), $desc, $pipes_d, null, $env_r);
+    foreach ($pipes_d as $p) {
+        if (is_resource($p)) {
+            fclose($p);
+        }
+    }
+    $p_up = proc_open(PHP_BINARY . ' ' . escapeshellarg($uploader_file), $desc, $pipes_u, null, $env_r);
+    foreach ($pipes_u as $p) {
+        if (is_resource($p)) {
+            fclose($p);
+        }
+    }
+    // Release both workers together so they race at counter zero.
+    file_put_contents($gate, 'go');
+    if (is_resource($p_del)) {
+        proc_close($p_del);
+    }
+    if (is_resource($p_up)) {
+        proc_close($p_up);
+    }
+    $cnt_path = jirafeau_file_count_path($cz);
+    $cnt = is_file($cnt_path) ? (int) trim(file_get_contents($cnt_path)) : 0;
+    $has_file = is_file($cz_payload);
+    $has_lock = is_file(jirafeau_file_lock_path($cz));
+    // Both orderings end at count=1 with payload; never counter without file.
+    if (!($cnt === 1 && $has_file && $has_lock)) {
+        $cz_ok = false;
+        echo "[FAIL detail] round $round count=$cnt file=" . ($has_file ? '1' : '0') . " lock=" . ($has_lock ? '1' : '0') . "\n";
+        break;
+    }
+}
+expect_true($cz_ok, '40 concurrent delete/upload races keep count=1, payload, and stable lock');
 
 echo "== Finalize crash markers are idempotent ==\n";
 $fin_hash = str_repeat('1', 32);
@@ -252,6 +355,57 @@ $one = jirafeau_finalize_onetime_claim($finishing2, $link_meta);
 expect_true($one === true, 'finalize of finishing performs single decrement');
 $count_fin2 = @file_get_contents(VAR_FILES . s2p($fin_hash) . $fin_hash . '_count');
 expect_true($count_fin2 === false || trim((string) $count_fin2) === '' || (int) trim($count_fin2) === 0, 'last finalize reaches zero refs');
+
+echo "== In-flight upload: admin_clean must not delete pre-link payload ==\n";
+$inflight = str_repeat('6', 32);
+$inflight_payload = VAR_FILES . s2p($inflight) . $inflight;
+$inflight_src = $var_root . 'inflight-src.bin';
+file_put_contents($inflight_src, 'upload-before-link');
+expect_eq(jirafeau_file_commit_payload($inflight, $inflight_src, 'rename'), 1, 'upload committed payload before link publish');
+expect_true(is_file($inflight_payload), 'payload exists after commit');
+expect_true(!is_file(VAR_LINKS . s2p('inflightlink') . 'inflightlink'), 'link not published yet');
+jirafeau_admin_clean();
+expect_true(is_file($inflight_payload), 'admin_clean keeps in-flight payload with no link yet');
+expect_eq(
+    (int) trim(@file_get_contents(jirafeau_file_count_path($inflight))),
+    1,
+    'admin_clean does not zero in-flight refcount'
+);
+// Document why reconcile stays offline-only: same window would destroy the file.
+$would_fix = jirafeau_admin_reconcile_file_refcounts();
+expect_true($would_fix >= 1, 'offline reconcile would treat pre-link upload as orphan');
+expect_true(!is_file($inflight_payload), 'reconcile deletes payload when no link exists yet');
+// Publish link after reconcile → broken share (link without file).
+$late_link = 'inflightlink';
+$late_path = VAR_LINKS . s2p($late_link) . $late_link;
+@mkdir(dirname($late_path), 0700, true);
+file_put_contents($late_path, "name\nmime\n7\n\n-1\n{$inflight}\nO\n0\n\ncode\nO\n");
+expect_true(is_file($late_path), 'link published after reconcile');
+expect_true(!is_file($inflight_payload), 'link exists but payload already gone (unsafe online reconcile)');
+
+echo "== Orphan refcount reconcile (quiescent / offline only) ==\n";
+$orph = str_repeat('8', 32);
+@mkdir(VAR_FILES . s2p($orph), 0700, true);
+file_put_contents(VAR_FILES . s2p($orph) . $orph, 'leaked-payload');
+jirafeau_file_refcount_adjust($orph, 1);
+jirafeau_file_refcount_adjust($orph, 1); // pretend crash skipped one decrement → 2
+// Only one live link remains.
+$orph_link = 'orphlive1';
+$orph_path = VAR_LINKS . s2p($orph_link) . $orph_link;
+@mkdir(dirname($orph_path), 0700, true);
+file_put_contents($orph_path, "name\nmime\n7\n\n-1\n{$orph}\nO\n0\n\ncode\nO\n");
+$fixed = jirafeau_admin_reconcile_file_refcounts();
+expect_true($fixed >= 1, 'quiescent reconcile trims leaked refcount');
+$orph_count = (int) trim(@file_get_contents(jirafeau_file_count_path($orph)));
+expect_eq($orph_count, 1, 'quiescent reconcile aligns counter to live links');
+expect_true(is_file(VAR_FILES . s2p($orph) . $orph), 'payload kept when a live link remains');
+// Zero live links → payload removed.
+@unlink($orph_path);
+$fixed2 = jirafeau_admin_reconcile_file_refcounts();
+expect_true($fixed2 >= 1, 'quiescent reconcile removes fully orphaned payload');
+expect_true(!is_file(VAR_FILES . s2p($orph) . $orph), 'orphan payload deleted at zero live refs');
+expect_true(!is_file(jirafeau_file_count_path($orph)), 'orphan count removed');
+expect_true(is_file(jirafeau_file_lock_path($orph)), 'stable lock retained after orphan cleanup');
 
 echo "== Auth throttle (no sleep, block before verify) ==\n";
 $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
