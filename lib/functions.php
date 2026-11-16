@@ -342,22 +342,24 @@ function jirafeau_clean_rm_link($link)
 
 function jirafeau_clean_rm_file($hash)
 {
-    $p = s2p("$hash");
-    $f = VAR_FILES . $p . $hash;
-    if (file_exists($f) && is_file($f)) {
-        unlink($f);
+    // Force refcount to zero under the stable per-hash lock (never unlink .lock).
+    $fp = jirafeau_file_refcount_lock($hash);
+    if ($fp === false) {
+        return;
     }
-    if (file_exists($f . '_count') && is_file($f . '_count')) {
-        unlink($f . '_count');
-    }
-    $parse = VAR_FILES . $p;
-    $scan = array();
-    while (file_exists($parse)
-           && ($scan = scandir($parse))
-           && count($scan) == 2 // '.' and '..' folders => empty.
-           && basename($parse) != basename(VAR_FILES)) {
-        rmdir($parse);
-        $parse = substr($parse, 0, strlen($parse) - strlen(basename($parse)) - 1);
+    try {
+        $p = s2p("$hash");
+        $f = VAR_FILES . $p . $hash;
+        if (is_file($f)) {
+            @unlink($f);
+        }
+        $count_file = jirafeau_file_count_path($hash);
+        if (is_file($count_file)) {
+            @unlink($count_file);
+        }
+    } finally {
+        flock($fp, LOCK_UN);
+        fclose($fp);
     }
 }
 
@@ -530,7 +532,24 @@ function jirafeau_delete_link($link)
 }
 
 /**
- * Open and exclusively lock the refcount file for a stored payload.
+ * Stable flock target for a stored payload. Never unlinked by refcount ops so
+ * concurrent processes always serialize on the same inode (Linux unlink race).
+ */
+function jirafeau_file_lock_path($hash)
+{
+    return VAR_FILES . s2p($hash) . $hash . '.lock';
+}
+
+/**
+ * Reference-counter path (may be created/removed under the stable lock).
+ */
+function jirafeau_file_count_path($hash)
+{
+    return VAR_FILES . s2p($hash) . $hash . '_count';
+}
+
+/**
+ * Open and exclusively lock the stable per-hash lock file.
  * @return resource|false
  */
 function jirafeau_file_refcount_lock($hash)
@@ -538,13 +557,12 @@ function jirafeau_file_refcount_lock($hash)
     if (!is_string($hash) || $hash === '') {
         return false;
     }
-    $p = s2p($hash);
-    $count_file = VAR_FILES . $p . $hash . '_count';
-    $dir = dirname($count_file);
+    $lock_file = jirafeau_file_lock_path($hash);
+    $dir = dirname($lock_file);
     if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
         return false;
     }
-    $fp = @fopen($count_file, 'c+');
+    $fp = @fopen($lock_file, 'c+');
     if ($fp === false) {
         return false;
     }
@@ -555,27 +573,43 @@ function jirafeau_file_refcount_lock($hash)
     return $fp;
 }
 
-function jirafeau_file_refcount_read($fp)
+/**
+ * Read refcount from the _count file (caller must hold the stable lock).
+ */
+function jirafeau_file_refcount_read_unlocked($hash)
 {
-    rewind($fp);
-    $raw = stream_get_contents($fp);
+    $count_file = jirafeau_file_count_path($hash);
+    if (!is_file($count_file)) {
+        return 0;
+    }
+    $raw = @file_get_contents($count_file);
     return ($raw === false || trim((string) $raw) === '') ? 0 : (int) trim($raw);
 }
 
-function jirafeau_file_refcount_write_unlocked($fp, $counter)
+/**
+ * Write/remove the _count file (caller must hold the stable lock).
+ * Counter 0 removes _count; the .lock file is left in place.
+ */
+function jirafeau_file_refcount_write_unlocked($hash, $counter)
 {
-    ftruncate($fp, 0);
-    rewind($fp);
+    $count_file = jirafeau_file_count_path($hash);
     if ($counter > 0) {
-        fwrite($fp, (string) $counter);
-        fflush($fp);
+        $dir = dirname($count_file);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            return false;
+        }
+        return @file_put_contents($count_file, (string) $counter) !== false;
     }
+    if (is_file($count_file)) {
+        @unlink($count_file);
+    }
+    return true;
 }
 
 /**
- * Atomically adjust a stored file reference counter under an exclusive lock.
- * When the counter reaches 0, the payload is removed while the lock is still held
- * so a concurrent deduplicated upload cannot revive a half-deleted file.
+ * Atomically adjust a stored file reference counter under the stable lock.
+ * When the counter reaches 0, the payload (and _count) are removed while the
+ * lock is still held. The .lock file is never unlinked.
  *
  * @return int|false new counter value, or false on lock/IO failure
  */
@@ -585,38 +619,30 @@ function jirafeau_file_refcount_adjust($hash, $delta)
     if ($fp === false) {
         return false;
     }
-    $p = s2p($hash);
-    $payload = VAR_FILES . $p . $hash;
-    $count_file = $payload . '_count';
-    $counter = jirafeau_file_refcount_read($fp);
-    $counter += (int) $delta;
-    if ($counter < 0) {
-        $counter = 0;
-    }
-    if ($counter > 0) {
-        jirafeau_file_refcount_write_unlocked($fp, $counter);
+    try {
+        $p = s2p($hash);
+        $payload = VAR_FILES . $p . $hash;
+        $counter = jirafeau_file_refcount_read_unlocked($hash);
+        $counter += (int) $delta;
+        if ($counter < 0) {
+            $counter = 0;
+        }
+        if ($counter > 0) {
+            if (!jirafeau_file_refcount_write_unlocked($hash, $counter)) {
+                return false;
+            }
+        } else {
+            // Keep LOCK_EX until payload/_count are gone to close the TOCTOU window.
+            if (is_file($payload)) {
+                @unlink($payload);
+            }
+            jirafeau_file_refcount_write_unlocked($hash, 0);
+        }
+        return $counter;
+    } finally {
         flock($fp, LOCK_UN);
         fclose($fp);
-    } else {
-        // Keep LOCK_EX until payload is gone to close the TOCTOU window.
-        if (is_file($payload)) {
-            @unlink($payload);
-        }
-        jirafeau_file_refcount_write_unlocked($fp, 0);
-        flock($fp, LOCK_UN);
-        fclose($fp);
-        @unlink($count_file);
-        $parse = VAR_FILES . $p;
-        while (is_dir($parse)
-               && ($scan = @scandir($parse))
-               && is_array($scan)
-               && count($scan) == 2
-               && basename($parse) != basename(VAR_FILES)) {
-            @rmdir($parse);
-            $parse = dirname($parse);
-        }
     }
-    return $counter;
 }
 
 /**
@@ -681,8 +707,10 @@ function jirafeau_file_commit_payload($hash, $src_path, $install_mode = 'rename'
         if (!is_file($payload)) {
             return false;
         }
-        $counter = jirafeau_file_refcount_read($fp) + 1;
-        jirafeau_file_refcount_write_unlocked($fp, $counter);
+        $counter = jirafeau_file_refcount_read_unlocked($hash) + 1;
+        if (!jirafeau_file_refcount_write_unlocked($hash, $counter)) {
+            return false;
+        }
         return $counter;
     } finally {
         flock($fp, LOCK_UN);
@@ -1258,6 +1286,122 @@ function jirafeau_admin_clean()
         }
     }
     return $count;
+}
+
+/**
+ * Reconcile stored file refcounts against live links.
+ *
+ * OFFLINE / QUIESCENT MAINTENANCE ONLY. Never call from the regular cleaner while
+ * uploads may be in flight: commit_payload can create a payload+counter before the
+ * link is published, and this scan would treat that as an orphan and delete it.
+ *
+ * Recovers safe leaks from finalize crashes after `.done` and before decrement when
+ * no writers are active. Live references: normal links, `.claimed-*`, `.finishing-*`.
+ * `.finishing-*.done` is not counted (logical finalize already published).
+ *
+ * @return int number of hashes whose counter was reduced
+ */
+function jirafeau_admin_reconcile_file_refcounts()
+{
+    $live = array();
+    $stack = array(VAR_LINKS);
+    while (($d = array_shift($stack)) && $d != null) {
+        $dir = @scandir($d);
+        if ($dir === false) {
+            continue;
+        }
+        foreach ($dir as $node) {
+            if ($node === '.' || $node === '..') {
+                continue;
+            }
+            $full = $d . $node;
+            if (is_dir($full)) {
+                $stack[] = $full . '/';
+                continue;
+            }
+            if (!is_file($full)) {
+                continue;
+            }
+            // .done markers are not live refs (decrement may be pending or done).
+            if (preg_match('/\.finishing-[0-9a-f]+\.done$/', $node)) {
+                continue;
+            }
+            $l = jirafeau_get_link_from_path($full);
+            if (!count($l) || empty($l['hash'])) {
+                continue;
+            }
+            $h = $l['hash'];
+            if (!isset($live[$h])) {
+                $live[$h] = 0;
+            }
+            $live[$h]++;
+        }
+    }
+
+    $fixed = 0;
+    $fstack = array(VAR_FILES);
+    while (($d = array_shift($fstack)) && $d != null) {
+        $dir = @scandir($d);
+        if ($dir === false) {
+            continue;
+        }
+        foreach ($dir as $node) {
+            if ($node === '.' || $node === '..') {
+                continue;
+            }
+            $full = $d . $node;
+            if (is_dir($full)) {
+                $fstack[] = $full . '/';
+                continue;
+            }
+            if (!is_file($full)) {
+                continue;
+            }
+            // Payload files only (skip _count and stable .lock).
+            if (substr($node, -6) === '_count' || substr($node, -5) === '.lock') {
+                continue;
+            }
+            if (!preg_match('/^[0-9a-f]+$/i', $node)) {
+                continue;
+            }
+            $hash = $node;
+            $expected = isset($live[$hash]) ? (int) $live[$hash] : 0;
+            $fp = jirafeau_file_refcount_lock($hash);
+            if ($fp === false) {
+                continue;
+            }
+            try {
+                $current = jirafeau_file_refcount_read_unlocked($hash);
+                // Also treat a payload with no _count as needing alignment.
+                if (!is_file(VAR_FILES . s2p($hash) . $hash) && $current === 0) {
+                    continue;
+                }
+                if ($current <= $expected) {
+                    continue;
+                }
+                $delta = $expected - $current;
+                // Apply directly while we already hold the lock.
+                $counter = $current + $delta;
+                if ($counter < 0) {
+                    $counter = 0;
+                }
+                $payload = VAR_FILES . s2p($hash) . $hash;
+                if ($counter > 0) {
+                    jirafeau_file_refcount_write_unlocked($hash, $counter);
+                } else {
+                    if (is_file($payload)) {
+                        @unlink($payload);
+                    }
+                    jirafeau_file_refcount_write_unlocked($hash, 0);
+                }
+                $fixed++;
+            } finally {
+                flock($fp, LOCK_UN);
+                fclose($fp);
+            }
+        }
+    }
+    return $fixed;
 }
 
 
