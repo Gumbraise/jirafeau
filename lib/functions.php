@@ -526,26 +526,54 @@ function jirafeau_delete_link($link)
     }
 
     jirafeau_clean_rm_link($link);
+    jirafeau_file_refcount_adjust($l['hash'], -1);
+}
 
-    $hash = $l['hash'];
-    $p = s2p("$hash");
-
-    $counter = 1;
-    if (file_exists(VAR_FILES . $p . $hash. '_count')) {
-        $content = file(VAR_FILES . $p . $hash. '_count');
-        $counter = trim($content[0]);
+/**
+ * Atomically adjust a stored file reference counter under an exclusive lock.
+ * When the counter reaches 0, the file payload is removed.
+ *
+ * @return int|false new counter value, or false on lock/IO failure
+ */
+function jirafeau_file_refcount_adjust($hash, $delta)
+{
+    if (!is_string($hash) || $hash === '') {
+        return false;
     }
-    $counter--;
-
-    if ($counter >= 1) {
-        $handle = fopen(VAR_FILES . $p . $hash. '_count', 'w');
-        fwrite($handle, $counter);
-        fclose($handle);
+    $p = s2p($hash);
+    $count_file = VAR_FILES . $p . $hash . '_count';
+    $dir = dirname($count_file);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        return false;
     }
-
-    if ($counter == 0) {
+    $fp = @fopen($count_file, 'c+');
+    if ($fp === false) {
+        return false;
+    }
+    if (!flock($fp, LOCK_EX)) {
+        fclose($fp);
+        return false;
+    }
+    $raw = stream_get_contents($fp);
+    $counter = ($raw === false || trim((string) $raw) === '') ? 0 : (int) trim($raw);
+    $counter += (int) $delta;
+    if ($counter < 0) {
+        $counter = 0;
+    }
+    ftruncate($fp, 0);
+    rewind($fp);
+    if ($counter > 0) {
+        fwrite($fp, (string) $counter);
+        fflush($fp);
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    } else {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        @unlink($count_file);
         jirafeau_clean_rm_file($hash);
     }
+    return $counter;
 }
 
 /**
@@ -742,16 +770,15 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
                  'delete_link' => ''));
     }
 
-    /* Increment or create count file. */
-    $counter = 0;
-    if (file_exists(VAR_FILES . $p . $hash . '_count')) {
-        $content = file(VAR_FILES . $p . $hash. '_count');
-        $counter = trim($content[0]);
+    /* Increment or create count file (locked). */
+    if (jirafeau_file_refcount_adjust($hash, 1) === false) {
+        return (array(
+                 'error' =>
+                   array('has_error' => true,
+                          'why' => t('INTERNAL_ERROR_DEL')),
+                 'link' => '',
+                 'delete_link' => ''));
     }
-    $counter++;
-    $handle = fopen(VAR_FILES . $p . $hash. '_count', 'w');
-    fwrite($handle, $counter);
-    fclose($handle);
 
     /* Create delete code. */
     $delete_link_code = jirafeau_gen_random(JIRAFEAU_DELETE_CODE_LENGTH);
@@ -777,14 +804,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
             unlink($link_tmp_name);
         }
 
-        $counter--;
-        if ($counter >= 1) {
-            $handle = fopen(VAR_FILES . $p . $hash. '_count', 'w');
-            fwrite($handle, $counter);
-            fclose($handle);
-        } else {
-            jirafeau_clean_rm_file($hash_link);
-        }
+        jirafeau_file_refcount_adjust($hash, -1);
         return array(
                  'error' =>
                    array('has_error' => true,
@@ -919,22 +939,18 @@ function check_errors($cfg)
 }
 
 /**
- * Read link information
- * @return array containing information.
+ * Parse link metadata from a link file path (active or claimed).
  */
-function jirafeau_get_link($hash)
+function jirafeau_get_link_from_path($path)
 {
     $out = array();
-    if (!is_string($hash) || !preg_match('/^[0-9a-zA-Z_-]+$/', $hash)) {
+    if (!is_string($path) || !is_file($path)) {
         return $out;
     }
-    $link = VAR_LINKS . s2p("$hash") . $hash;
-
-    if (!file_exists($link)) {
+    $c = @file($path);
+    if ($c === false || count($c) < 11) {
         return $out;
     }
-
-    $c = file($link);
     $out['file_name'] = trim($c[0]);
     $out['mime_type'] = trim($c[1]);
     $out['file_size'] = trim($c[2]);
@@ -949,6 +965,33 @@ function jirafeau_get_link($hash)
     $out['crypted_legacy'] = trim($c[10]) == 'C';
 
     return $out;
+}
+
+/**
+ * Read link information
+ * @return array containing information.
+ */
+function jirafeau_get_link($hash)
+{
+    $out = array();
+    if (!is_string($hash) || !preg_match('/^[0-9a-zA-Z_-]+$/', $hash)) {
+        return $out;
+    }
+    return jirafeau_get_link_from_path(VAR_LINKS . s2p("$hash") . $hash);
+}
+
+/**
+ * Extract original link id from a claimed one-time filename, or false.
+ */
+function jirafeau_claimed_link_name($basename)
+{
+    if (!is_string($basename)) {
+        return false;
+    }
+    if (preg_match('/^([0-9a-zA-Z_-]+)\.claimed-[0-9a-f]+$/', $basename, $m)) {
+        return $m[1];
+    }
+    return false;
 }
 
 /**
@@ -1063,7 +1106,7 @@ function jirafeau_admin_clean()
 
         foreach ($dir as $node) {
             if (strcmp($node, '.') == 0 || strcmp($node, '..') == 0 ||
-                preg_match('/\.tmp/i', "$node")) {
+                preg_match('/\.tmp$/i', "$node")) {
                 continue;
             }
 
@@ -1071,6 +1114,23 @@ function jirafeau_admin_clean()
                 /* Push new found directory. */
                 $stack[] = $d . $node . '/';
             } elseif (is_file($d . $node)) {
+                $full = $d . $node;
+                /* Recover interrupted one-time downloads left as .claimed-* orphans. */
+                if (jirafeau_claimed_link_name($node) !== false) {
+                    $mtime = @filemtime($full);
+                    // 24h keeps long downloads safe; shutdown handlers clean sooner.
+                    if ($mtime !== false && (time() - $mtime) > 86400) {
+                        $l = jirafeau_get_link_from_path($full);
+                        if (count($l)) {
+                            jirafeau_finalize_onetime_claim($full, $l);
+                        } else {
+                            @unlink($full);
+                        }
+                        $count++;
+                    }
+                    continue;
+                }
+
                 /* Read link information. */
                 $l = jirafeau_get_link(basename($node));
                 if (!count($l)) {
@@ -1265,22 +1325,80 @@ function jirafeau_get_async_ref($ref)
 }
 
 /**
- * Delete async transfer information
+ * Path of the per-transfer async lock file.
  */
-function jirafeau_async_delete($ref)
+function jirafeau_async_lock_path($ref)
+{
+    return VAR_ASYNC . s2p($ref) . $ref . '.lock';
+}
+
+/**
+ * Acquire the exclusive async lock for a transfer.
+ * @return resource|false
+ */
+function jirafeau_async_acquire_lock($ref)
+{
+    if (!jirafeau_is_valid_async_ref($ref)) {
+        return false;
+    }
+    $dir = dirname(jirafeau_async_lock_path($ref));
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        return false;
+    }
+    $lock = @fopen(jirafeau_async_lock_path($ref), 'c');
+    if ($lock === false) {
+        return false;
+    }
+    if (!flock($lock, LOCK_EX)) {
+        fclose($lock);
+        return false;
+    }
+    return $lock;
+}
+
+function jirafeau_async_release_lock($lock)
+{
+    if ($lock) {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+/**
+ * Delete async transfer information.
+ * Pass an already-held lock resource to avoid re-locking (and deadlocks) from push/end.
+ */
+function jirafeau_async_delete($ref, $held_lock = null)
 {
     if (!jirafeau_is_valid_async_ref($ref)) {
         return;
     }
+    $own_lock = false;
+    $lock = $held_lock;
+    if ($lock === null) {
+        $lock = jirafeau_async_acquire_lock($ref);
+        if ($lock === false) {
+            return;
+        }
+        $own_lock = true;
+    }
     $p = s2p("$ref");
-    if (file_exists(VAR_ASYNC . $p . $ref)) {
-        unlink(VAR_ASYNC . $p . $ref);
-    }
-    if (file_exists(VAR_ASYNC . $p . $ref . '_data')) {
-        unlink(VAR_ASYNC . $p . $ref . '_data');
-    }
-    if (file_exists(VAR_ASYNC . $p . $ref . '.lock')) {
-        unlink(VAR_ASYNC . $p . $ref . '.lock');
+    $lock_path = jirafeau_async_lock_path($ref);
+    try {
+        if (file_exists(VAR_ASYNC . $p . $ref)) {
+            unlink(VAR_ASYNC . $p . $ref);
+        }
+        if (file_exists(VAR_ASYNC . $p . $ref . '_data')) {
+            unlink(VAR_ASYNC . $p . $ref . '_data');
+        }
+        if (file_exists(VAR_ASYNC . $p . $ref . '.crypt')) {
+            @unlink(VAR_ASYNC . $p . $ref . '.crypt');
+        }
+    } finally {
+        if ($own_lock) {
+            jirafeau_async_release_lock($lock);
+            @unlink($lock_path);
+        }
     }
     $parse = VAR_ASYNC . $p;
     $scan = array();
@@ -1354,12 +1472,8 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
     }
 
     $p = s2p($ref);
-    $lock_path = VAR_ASYNC . $p . $ref . '.lock';
-    $lock = @fopen($lock_path, 'c');
-    if ($lock === false || !flock($lock, LOCK_EX)) {
-        if ($lock) {
-            fclose($lock);
-        }
+    $lock = jirafeau_async_acquire_lock($ref);
+    if ($lock === false) {
         return "Error: transfer busy";
     }
 
@@ -1392,7 +1506,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
         /* Check that file size is not above upload limit. */
         if ($max_file_size > 0 &&
             filesize($r_path) + filesize($w_path) > $max_file_size * 1024 * 1024) {
-            jirafeau_async_delete($ref);
+            jirafeau_async_delete($ref, $lock);
             return "Error: file size is above upload limit";
         }
 
@@ -1403,7 +1517,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
             if (fwrite($w, fread($r, 1024)) === false) {
                 fclose($r);
                 fclose($w);
-                jirafeau_async_delete($ref);
+                jirafeau_async_delete($ref, $lock);
                 return "Error: cannot write file";
             }
         }
@@ -1423,8 +1537,7 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
         fclose($handle);
         return $next;
     } finally {
-        flock($lock, LOCK_UN);
-        fclose($lock);
+        jirafeau_async_release_lock($lock);
     }
 }
 
@@ -1442,97 +1555,89 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
         return "Error: bad code for ending transfer";
     }
 
-    /* Get async infos. */
-    $a = jirafeau_get_async_ref($ref);
-    if (count($a) == 0
-        || !is_string($code)
-        || !hash_equals((string) $a['next_code'], (string) $code)) {
-        return "Error: bad code for ending transfer";
+    $lock = jirafeau_async_acquire_lock($ref);
+    if ($lock === false) {
+        return "Error: transfer busy";
     }
 
-    /* Validate code string. */
-    if (!ctype_xdigit($code) || strlen($code) != JIRAFEAU_ASYNC_CODE_LENGTH) {
-        return 'Error: Malformed code string';
-    }
+    try {
+        /* Re-read under the same lock used by push. */
+        $a = jirafeau_get_async_ref($ref);
+        if (count($a) == 0
+            || !is_string($code)
+            || !hash_equals((string) $a['next_code'], (string) $code)) {
+            return "Error: bad code for ending transfer";
+        }
 
-    /* Get async infos. */
-    $a = jirafeau_get_async_ref($ref);
+        /* Generate link infos. */
+        $p = VAR_ASYNC . s2p($ref) . $ref . "_data";
+        if (!file_exists($p)) {
+            return "Error: referenced file does not exist";
+        }
 
-    /* Check some errors. */
-    if (count($a) == 0) {
-        return 'Error: cannot find transfer';
-    }
+        /* Store filesize before encrypting the file */
+        /* Otherwise we would send the size of the encrypted file and the data of the unencrypted file */
+        /* This would break some browsers */
+        $size = filesize($p);
 
-    if (!hash_equals($a['next_code'], "$code")) {
-        return 'Error: bad code for ending transfer';
-    }
-    /* Generate link infos. */
-    $p = VAR_ASYNC . s2p($ref) . $ref . '_data';
-    if (!file_exists($p)) {
-        return 'Error: referenced file does not exist';
-    }
-
-    /* Store filesize before encrypting the file */
-    /* Otherwise we would send the size of the encrypted file and the data of the unencrypted file */
-    /* This would break some browsers */
-    $size = filesize($p);
-
-    $crypted = false;
-    $crypt_key = '';
-    if ($crypt == true && extension_loaded('sodium') == true) {
-        $crypt_key = jirafeau_encrypt_file($p, $p.'.crypt');
-        if (strlen($crypt_key) > 0) {
-            if (rename($p.'.crypt', $p) === true) {
-                $crypted = true;
+        $crypted = false;
+        $crypt_key = '';
+        if ($crypt == true && extension_loaded('sodium') == true) {
+            $crypt_key = jirafeau_encrypt_file($p, $p.'.crypt');
+            if (strlen($crypt_key) > 0) {
+                if (rename($p.'.crypt', $p) === true) {
+                    $crypted = true;
+                }
             }
         }
-    }
 
-    $hash = jirafeau_hash_file($file_hash_method, $p);
-    $np = s2p($hash);
-    $delete_link_code = jirafeau_gen_random(JIRAFEAU_DELETE_CODE_LENGTH);
+        $hash = jirafeau_hash_file($file_hash_method, $p);
+        $np = s2p($hash);
+        $delete_link_code = jirafeau_gen_random(JIRAFEAU_DELETE_CODE_LENGTH);
 
-    /* File already exist ? */
-    if (!file_exists(VAR_FILES . $np)) {
-        @mkdir(VAR_FILES . $np, 0755, true);
-    }
-    if (!file_exists(VAR_FILES . $np . $hash)) {
-        rename($p, VAR_FILES . $np . $hash);
-    }
+        /* File already exist ? */
+        if (!file_exists(VAR_FILES . $np)) {
+            @mkdir(VAR_FILES . $np, 0755, true);
+        }
+        if (!file_exists(VAR_FILES . $np . $hash)) {
+            rename($p, VAR_FILES . $np . $hash);
+        } else {
+            // Deduplicated: drop the async payload copy.
+            @unlink($p);
+        }
 
-    /* Increment or create count file. */
-    $counter = 0;
-    if (file_exists(VAR_FILES . $np . $hash . '_count')) {
-        $content = file(VAR_FILES . $np . $hash. '_count');
-        $counter = trim($content[0]);
-    }
-    $counter++;
-    $handle = fopen(VAR_FILES . $np . $hash. '_count', 'w');
-    fwrite($handle, $counter);
-    fclose($handle);
+        if (jirafeau_file_refcount_adjust($hash, 1) === false) {
+            return "Error: cannot update file reference counter";
+        }
 
-    /* Create link. */
-    $link_tmp_name =  VAR_LINKS . $hash . rand(0, 10000) . '.tmp';
-    $handle = fopen($link_tmp_name, 'w');
-    fwrite(
-        $handle,
-        $a['file_name'] . NL . $a['mime_type'] . NL . $size . NL .
-            $a['key'] . NL . $a['time'] . NL . $hash . NL . $a['onetime'] . NL .
-            time() . NL . $a['ip'] . NL . $delete_link_code . NL . ($crypted ? 'C2' : 'O')
-    );
-    fclose($handle);
-    $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
-    $l = s2p("$hash_link");
-    if (!@mkdir(VAR_LINKS . $l, 0755, true)) {
-        return 'Error: cannot create folder in LINKS';
-    }
-    if (!rename($link_tmp_name, VAR_LINKS . $l . $hash_link)) {
-        return 'Error: cannot rename file in LINKS';
-    }
+        /* Create link. */
+        $link_tmp_name =  VAR_LINKS . $hash . rand(0, 10000) . '.tmp';
+        $handle = fopen($link_tmp_name, 'w');
+        fwrite(
+            $handle,
+            $a['file_name'] . NL . $a['mime_type'] . NL . $size . NL .
+                $a['key'] . NL . $a['time'] . NL . $hash . NL . $a['onetime'] . NL .
+                time() . NL . $a['ip'] . NL . $delete_link_code . NL . ($crypted ? 'C2' : 'O')
+        );
+        fclose($handle);
+        $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
+        $l = s2p("$hash_link");
+        if (!@mkdir(VAR_LINKS . $l, 0755, true)) {
+            jirafeau_file_refcount_adjust($hash, -1);
+            return "Error: cannot create folder in LINKS";
+        }
+        if (!rename($link_tmp_name, VAR_LINKS . $l . $hash_link)) {
+            jirafeau_file_refcount_adjust($hash, -1);
+            return "Error: cannot rename file in LINKS";
+        }
 
-    /* Clean async upload. */
-    jirafeau_async_delete($ref);
-    return $hash_link . NL . $delete_link_code . NL . urlencode($crypt_key);
+        /* Clean async upload under the held lock. */
+        jirafeau_async_delete($ref, $lock);
+        return $hash_link . NL . $delete_link_code . NL . urlencode($crypt_key);
+    } finally {
+        jirafeau_async_release_lock($lock);
+        @unlink(jirafeau_async_lock_path($ref));
+    }
 }
 
 function jirafeau_crypt_create_iv($base, $size)
@@ -2049,77 +2154,126 @@ function jirafeau_finalize_onetime_claim($claimed_path, $link)
     if (!is_array($link) || empty($link['hash'])) {
         return;
     }
-    $hash = $link['hash'];
-    $p = s2p($hash);
-    $count_file = VAR_FILES . $p . $hash . '_count';
-    $fp = @fopen($count_file, file_exists($count_file) ? 'c+' : 'w+');
-    if ($fp === false) {
-        return;
-    }
-    if (!flock($fp, LOCK_EX)) {
-        fclose($fp);
-        return;
-    }
-    $raw = stream_get_contents($fp);
-    $counter = ($raw === false || trim((string) $raw) === '') ? 1 : (int) trim($raw);
-    $counter--;
-    ftruncate($fp, 0);
-    rewind($fp);
-    if ($counter >= 1) {
-        fwrite($fp, (string) $counter);
-        fflush($fp);
-        flock($fp, LOCK_UN);
-        fclose($fp);
-    } else {
-        flock($fp, LOCK_UN);
-        fclose($fp);
-        @unlink($count_file);
-        jirafeau_clean_rm_file($hash);
-    }
+    jirafeau_file_refcount_adjust($link['hash'], -1);
 }
 
 /**
- * Progressive per-IP delay after authentication failures (capped).
+ * Auth throttle state file for a scope + client key.
  */
-function jirafeau_auth_failure_penalty($scope)
+function jirafeau_auth_throttle_file($scope, $client_key)
 {
-    $ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : 'unknown';
     $base = defined('VAR_FILES') ? dirname(rtrim(VAR_FILES, '/\\')) : sys_get_temp_dir();
     $dir = $base . DIRECTORY_SEPARATOR . 'auth_throttle';
     if (!is_dir($dir)) {
         @mkdir($dir, 0700, true);
     }
-    $file = $dir . DIRECTORY_SEPARATOR . hash('sha256', $scope . '|' . $ip);
-    $now = time();
-    $window = 900;
-    $attempts = array();
+    return $dir . DIRECTORY_SEPARATOR . hash('sha256', $scope . '|' . $client_key);
+}
+
+/**
+ * Resolve the client identity used for auth throttling (honours trusted proxy_ip).
+ */
+function jirafeau_auth_client_key($cfg = null)
+{
+    if (is_array($cfg)) {
+        return (string) get_ip_address($cfg);
+    }
+    global $cfg;
+    if (is_array($cfg)) {
+        return (string) get_ip_address($cfg);
+    }
+    return isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : 'unknown';
+}
+
+/**
+ * Whether authentication attempts are temporarily refused for this client.
+ * Check this BEFORE verifying a password.
+ */
+function jirafeau_auth_is_blocked($scope, $cfg = null, $max_attempts = 5, $lockout_seconds = 300)
+{
+    $file = jirafeau_auth_throttle_file($scope, jirafeau_auth_client_key($cfg));
+    if (!is_file($file)) {
+        return false;
+    }
     $fp = @fopen($file, 'c+');
-    if ($fp && flock($fp, LOCK_EX)) {
-        $raw = stream_get_contents($fp);
-        if (is_string($raw) && $raw !== '') {
-            $attempts = array_map('intval', explode("\n", trim($raw)));
-        }
-        $attempts = array_values(array_filter($attempts, function ($t) use ($now, $window) {
-            return ($now - $t) < $window;
-        }));
-        $attempts[] = $now;
-        ftruncate($fp, 0);
-        rewind($fp);
-        fwrite($fp, implode("\n", $attempts));
-        fflush($fp);
-        flock($fp, LOCK_UN);
-        fclose($fp);
-    } else {
+    if (!$fp || !flock($fp, LOCK_SH)) {
         if ($fp) {
             fclose($fp);
         }
-        $attempts = array($now);
+        return false;
     }
-    $n = count($attempts);
-    // 1,2,4,8,16… capped so a single IP cannot hold a worker for minutes.
-    $delay = min(16, (int) pow(2, min(4, max(0, $n - 1))));
-    sleep($delay);
-    return $n;
+    $raw = stream_get_contents($fp);
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    $data = @json_decode((string) $raw, true);
+    if (!is_array($data) || empty($data['blocked_until'])) {
+        return false;
+    }
+    return time() < (int) $data['blocked_until'];
+}
+
+/**
+ * Record a failed authentication attempt. Does not sleep; may set a lockout window.
+ *
+ * @return array{attempts:int,blocked:bool,blocked_until:int}
+ */
+function jirafeau_auth_register_failure($scope, $cfg = null, $max_attempts = 5, $lockout_seconds = 300, $window_seconds = 900)
+{
+    $file = jirafeau_auth_throttle_file($scope, jirafeau_auth_client_key($cfg));
+    $now = time();
+    $result = array('attempts' => 1, 'blocked' => false, 'blocked_until' => 0);
+    $fp = @fopen($file, 'c+');
+    if (!$fp || !flock($fp, LOCK_EX)) {
+        if ($fp) {
+            fclose($fp);
+        }
+        return $result;
+    }
+    $raw = stream_get_contents($fp);
+    $data = @json_decode((string) $raw, true);
+    if (!is_array($data)) {
+        $data = array('failures' => array(), 'blocked_until' => 0);
+    }
+    $failures = array();
+    if (!empty($data['failures']) && is_array($data['failures'])) {
+        foreach ($data['failures'] as $t) {
+            if (($now - (int) $t) < $window_seconds) {
+                $failures[] = (int) $t;
+            }
+        }
+    }
+    $failures[] = $now;
+    $blocked_until = !empty($data['blocked_until']) ? (int) $data['blocked_until'] : 0;
+    if (count($failures) >= $max_attempts) {
+        $blocked_until = max($blocked_until, $now + $lockout_seconds);
+        $failures = array();
+    }
+    $payload = json_encode(array(
+        'failures' => $failures,
+        'blocked_until' => $blocked_until,
+    ));
+    ftruncate($fp, 0);
+    rewind($fp);
+    fwrite($fp, $payload);
+    fflush($fp);
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return array(
+        'attempts' => count($failures),
+        'blocked' => $now < $blocked_until,
+        'blocked_until' => $blocked_until,
+    );
+}
+
+/**
+ * Clear throttle state after a successful authentication.
+ */
+function jirafeau_auth_clear_failures($scope, $cfg = null)
+{
+    $file = jirafeau_auth_throttle_file($scope, jirafeau_auth_client_key($cfg));
+    if (is_file($file)) {
+        @unlink($file);
+    }
 }
 
 function jirafeau_export_cfg($cfg)
