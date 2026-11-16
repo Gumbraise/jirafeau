@@ -141,7 +141,7 @@ require(JIRAFEAU_ROOT . 'lib/lang.php');
 
 ?>
 // @license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3-or-Later
-var web_root = "<?php echo $cfg['web_root']; ?>";
+var web_root = <?php echo json_encode($cfg['web_root'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 var use_shortlinks = <?php echo ($cfg['use_shortlinks'] === true) ? 'true' : 'false'; ?>;
 
 var lang_array = <?php echo json_lang_generator(null); ?>;
@@ -919,22 +919,21 @@ function addTextCopyListener(button_id, text_id) {
 }
 
 function set_dark_mode() {
-    let steel_sheet = "<?php echo 'media/' . $cfg['dark_style'] . '/style.css.php'; ?>";
-    let shortcut_icon = "<?php echo 'media/' . $cfg['dark_style'] . '/favicon.ico'; ?>";
+    let steel_sheet = <?php echo json_encode('media/' . (jirafeau_is_valid_style_name($cfg['dark_style']) ? $cfg['dark_style'] : 'dark-courgette') . '/style.css.php'); ?>;
+    let shortcut_icon = <?php echo json_encode('media/' . (jirafeau_is_valid_style_name($cfg['dark_style']) ? $cfg['dark_style'] : 'dark-courgette') . '/favicon.ico'); ?>;
     document.getElementById('stylesheet').href = steel_sheet;
     document.getElementById('shortcut_icon').href = shortcut_icon;
 }
 
 function set_light_mode() {
-    let steel_sheet = "<?php echo 'media/' . $cfg['style'] . '/style.css.php'; ?>";
-    let shortcut_icon = "<?php echo 'media/' . $cfg['style'] . '/favicon.ico'; ?>";
+    let steel_sheet = <?php echo json_encode('media/' . (jirafeau_is_valid_style_name($cfg['style']) ? $cfg['style'] : 'courgette') . '/style.css.php'); ?>;
+    let shortcut_icon = <?php echo json_encode('media/' . (jirafeau_is_valid_style_name($cfg['style']) ? $cfg['style'] : 'courgette') . '/favicon.ico'); ?>;
     document.getElementById('stylesheet').href = steel_sheet;
     document.getElementById('shortcut_icon').href = shortcut_icon;
 }
 
 function color_scheme_preferences() {
 
-    let dark_mode_steel_sheet = "<?php echo 'media/' . $cfg['dark_style'] . '/style.css.php'; ?>"
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
         set_dark_mode();
     } else {
