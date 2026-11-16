@@ -64,6 +64,7 @@ if (has_error()) {
     exit;
 }
 
+jirafeau_configure_session();
 session_start();
 
 /* Upload file */
@@ -181,7 +182,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         echo 'Error 8';
         exit;
     }
-    if (strlen($d) > 0 && $d == $link['link_code']) {
+    if (strlen($d) > 0 && is_string($link['link_code']) && hash_equals($link['link_code'], $d)) {
         jirafeau_delete_link($link_name);
         echo 'Ok';
         exit;
@@ -191,12 +192,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         echo 'Error 9';
         exit;
     }
-    // sha hash compare
-    $sha_hash_compare = (strpos($link['key'], '[SHA256]') === 0 && hash_equals(substr($link['key'], 8), hash('sha256', $key)));
-    // legacy md5 compare - before prefixing
-    $md5_legacy_hash_compare = hash_equals($link['key'], md5($key));
-    
-    if (strlen($link['key']) > 0 && !$sha_hash_compare && !$md5_legacy_hash_compare ) {
+    if (strlen($link['key']) > 0 && !jirafeau_verify_download_password($key, $link['key'])) {
         sleep(2);
         echo 'Error 10';
         exit;
@@ -208,10 +204,10 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     }
 
     /* Read file. */
+    jirafeau_send_security_headers(false);
     header('Content-Length: ' . $link['file_size']);
-    header('Content-Type: ' . $link['mime_type']);
-    header('Content-Disposition: attachment; filename="' .
-            $link['file_name'] . '"');
+    header('Content-Type: ' . jirafeau_sanitize_mime_type($link['mime_type']));
+    jirafeau_content_disposition_header($link['file_name'], true);
 
     $r = fopen(VAR_FILES . $p . $link['hash'], 'r');
     while (!feof($r)) {

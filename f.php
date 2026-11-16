@@ -82,7 +82,7 @@ if (!file_exists(VAR_FILES . $p . $link['hash'])) {
     exit;
 }
 
-if (!empty($delete_code) && hash_equals((string) $link['link_code'], (string) $delete_code)) {
+if (!empty($delete_code) && is_string($link['link_code']) && hash_equals($link['link_code'], $delete_code)) {
     require(JIRAFEAU_ROOT.'lib/template/header.php');
     if (isset($_POST['do_delete'])) {
         jirafeau_delete_link($link_name);
@@ -171,13 +171,8 @@ if (!empty($link['key'])) {
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
         exit;
     } else {
-        $sha_hash_compare = strpos($link['key'], '[SHA256]') === 0 && hash_equals(substr($link['key'], 8), hash('sha256', $_POST['key']));
-        // legacy md5 compare - before prefixing
-        $md5_legacy_hash_compare = hash_equals($link['key'], md5($_POST['key']));
-
-        if ( $sha_hash_compare ) {
-            $password_challenged = true;
-        } elseif ( $md5_legacy_hash_compare ) {
+        $posted_key = is_string($_POST['key']) ? $_POST['key'] : '';
+        if (jirafeau_verify_download_password($posted_key, $link['key'])) {
             $password_challenged = true;
         } else {
             sleep(2);
@@ -232,14 +227,15 @@ if (!$password_challenged && !$do_download && !$do_preview) {
 }
 
 header('HTTP/1.0 200 OK');
+jirafeau_send_security_headers(false);
 header('Content-Length: ' . $link['file_size']);
-if (!jirafeau_is_viewable($link['mime_type']) || !$cfg['preview'] || $do_download) {
-    header('Content-Disposition: attachment; filename="' . $link['file_name'] . '"');
+$safe_mime = jirafeau_sanitize_mime_type($link['mime_type']);
+if (!jirafeau_is_viewable($safe_mime) || !$cfg['preview'] || $do_download) {
+    jirafeau_content_disposition_header($link['file_name'], true);
 } else {
-    header('Content-Disposition: filename="' . $link['file_name'] . '"');
-    header('X-Content-Type-Options: nosniff');
+    jirafeau_content_disposition_header($link['file_name'], false);
 }
-header('Content-Type: ' . $link['mime_type']);
+header('Content-Type: ' . $safe_mime);
 if ($cfg['file_hash'] == "md5") {
     header('Content-MD5: ' . hex_to_base64($link['hash']));
 }
