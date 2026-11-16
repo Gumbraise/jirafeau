@@ -1,3 +1,8 @@
+stages:
+  - test
+  - lint
+  - deploy
+
 # Select what we should cache
 cache:
   paths:
@@ -28,26 +33,41 @@ cache:
       exit_codes:
         - 1
 
+# Security / concurrency regression suite (no Composer deps)
+job_security_tests:
+  stage: test
+  image: php:8.3-cli
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - php -v
+    - php tests/security/run.php
+    - php tests/security/concurrency_run.php
 
 # Run tests for php:8.5
 job_lint_app_85:
+  stage: lint
   image: php:8.5
   before_script: *before_linter_script
   script: *linter_script
 
 # Run tests for php:8.4
 job_lint_app_84:
+  stage: lint
   image: php:8.4
   before_script: *before_linter_script
   script: *linter_script
 
 job_lint_app_83:
+  stage: lint
   image: php:8.3
   before_script: *before_linter_script
   script: *linter_script
 
 # Run tests for php:8.2
 job_lint_app_82:
+  stage: lint
   image: php:8.2
   before_script: *before_linter_script
   script: *linter_script
@@ -59,7 +79,18 @@ job_lint_app_82:
 
 # Run tests for php:8.1
 job_lint_app_81:
+  stage: lint
   image: php:8.1
+  before_script: *before_linter_script
+  script: *linter_script
+  <<: *linter_warning
+  
+
+
+# Run tests for php:7.4
+job_lint_app_74:
+  stage: lint
+  image: php:7.4
   before_script: *before_linter_script
   script: *linter_script
   <<: *linter_warning
