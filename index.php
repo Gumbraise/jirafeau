@@ -18,12 +18,14 @@
  *  You should have received a copy of the GNU Affero General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-session_start();
 define('JIRAFEAU_ROOT', dirname(__FILE__) . '/');
 
 require(JIRAFEAU_ROOT . 'lib/settings.php');
 require(JIRAFEAU_ROOT . 'lib/functions.php');
 require(JIRAFEAU_ROOT . 'lib/lang.php');
+
+jirafeau_configure_session();
+session_start();
 
 $download_pass = null;
 

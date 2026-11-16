@@ -64,8 +64,8 @@ if (!is_writable(JIRAFEAU_CFG) && !@chmod(JIRAFEAU_CFG, '0666')) {
 if (isset($_POST['step']) && isset($_POST['next'])) {
     switch ($_POST['step']) {
         case 1:
-            if (strlen($_POST['admin_password'])) {
-                $cfg['admin_password'] = hash('sha256', $_POST['admin_password']);
+            if (isset($_POST['admin_password']) && is_string($_POST['admin_password']) && strlen($_POST['admin_password'])) {
+                $cfg['admin_password'] = jirafeau_hash_admin_password($_POST['admin_password']);
             } else {
                 $cfg['admin_password'] = '';
             }

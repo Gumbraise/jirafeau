@@ -18,12 +18,14 @@
  *  You should have received a copy of the GNU Affero General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-session_start();
 define('JIRAFEAU_ROOT', dirname(__FILE__) . '/');
 
 require(JIRAFEAU_ROOT . 'lib/settings.php');
 require(JIRAFEAU_ROOT . 'lib/functions.php');
 require(JIRAFEAU_ROOT . 'lib/lang.php');
+
+jirafeau_configure_session();
+session_start();
 
 /* Check if installation is OK. */
 if (file_exists(JIRAFEAU_ROOT . 'install.php')
@@ -60,22 +62,36 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
     }
 
     /* Logout if requested. */
-    if (jirafeau_admin_session_logged() && isset($_POST['action']) && (strcmp($_POST['action'], 'logout') == 0)) {
+    if (jirafeau_admin_is_authenticated() && isset($_POST['action']) && (strcmp($_POST['action'], 'logout') == 0)) {
+        jirafeau_admin_require_csrf_or_exit();
         jirafeau_session_end();
+        header('Location: admin.php');
+        exit;
     }
 
-    if (!jirafeau_admin_session_logged()) {
+    if (!jirafeau_admin_is_authenticated()) {
+        $authed = false;
         /* Test HTTP authentication. */
-        if (!empty($cfg['admin_http_auth_user']) &&
-          ((is_array($cfg['admin_http_auth_user']) && in_array($_SERVER['PHP_AUTH_USER'], $cfg['admin_http_auth_user'])) ||
-          (($cfg['admin_http_auth_user'] == $_SERVER['PHP_AUTH_USER'])))) {
-            jirafeau_admin_session_start();
+        if (!empty($cfg['admin_http_auth_user']) && isset($_SERVER['PHP_AUTH_USER'])) {
+            $http_users = is_array($cfg['admin_http_auth_user'])
+                ? $cfg['admin_http_auth_user']
+                : array($cfg['admin_http_auth_user']);
+            if (in_array($_SERVER['PHP_AUTH_USER'], $http_users, true)) {
+                jirafeau_admin_session_start();
+                $authed = true;
+            }
         }
         /* Test web password authentication. */
-        elseif (!empty($cfg['admin_password']) && isset($_POST['admin_password'])) {
-            if (hash_equals($cfg['admin_password'], hash('sha256', $_POST['admin_password']))) {
+        if (!$authed && !empty($cfg['admin_password']) && isset($_POST['admin_password']) && is_string($_POST['admin_password'])) {
+            if (jirafeau_verify_admin_password($_POST['admin_password'], $cfg['admin_password'])) {
+                if (jirafeau_admin_password_needs_rehash($cfg['admin_password'])) {
+                    $cfg['admin_password'] = jirafeau_hash_admin_password($_POST['admin_password']);
+                    jirafeau_export_cfg($cfg);
+                }
                 jirafeau_admin_session_start();
+                $authed = true;
             } else {
+                sleep(2);
                 require(JIRAFEAU_ROOT . 'lib/template/header.php');
                 echo '<div class="error"><p>'. t('BAD_PSW') . '</p></div>';
                 require(JIRAFEAU_ROOT.'lib/template/footer.php');
@@ -83,7 +99,7 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
             }
         }
         /* Admin password prompt form. */
-        else {
+        if (!$authed) {
             require(JIRAFEAU_ROOT . 'lib/template/header.php'); ?>
           <form method="post" class="form login">
           <fieldset>
@@ -162,7 +178,7 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
               <input type = "hidden" name = "action" value = "list"/>
               <?php echo jirafeau_admin_csrf_field() ?>
               <td class = "info">
-                  <?php echo t('LS_FILES'); ?>
+                  <?php echo t('LIST_FILES'); ?>
               </td>
               <td></td>
               <td>
@@ -250,8 +266,10 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
           </fieldset></div><?php
     }
 
-    /* Check for actions */
+    /* Check for actions — CSRF required for every state-changing POST. */
     if (isset($_POST['action'])) {
+        jirafeau_admin_require_csrf_or_exit();
+
         if (strcmp($_POST['action'], 'clean') == 0) {
             $total = jirafeau_admin_clean();
             echo '<div class="message">' . NL;
@@ -273,29 +291,40 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
         } elseif (strcmp($_POST['action'], 'list') == 0) {
             jirafeau_admin_list("", "", "");
         } elseif (strcmp($_POST['action'], 'search_by_name') == 0) {
-            jirafeau_admin_list($_POST['name'], "", "");
+            $name = isset($_POST['name']) && is_string($_POST['name']) ? $_POST['name'] : '';
+            jirafeau_admin_list($name, "", "");
         } elseif (strcmp($_POST['action'], 'search_by_file_hash') == 0) {
-            jirafeau_admin_list("", $_POST['hash'], "");
+            $hash = isset($_POST['hash']) && is_string($_POST['hash']) ? $_POST['hash'] : '';
+            jirafeau_admin_list("", $hash, "");
         } elseif (strcmp($_POST['action'], 'search_link') == 0) {
-            jirafeau_admin_list("", "", $_POST['link']);
+            $link = isset($_POST['link']) && is_string($_POST['link']) ? $_POST['link'] : '';
+            jirafeau_admin_list("", "", $link);
         } elseif (strcmp($_POST['action'], 'delete_link') == 0) {
-            jirafeau_delete_link($_POST['link']);
+            if (isset($_POST['link']) && is_string($_POST['link'])) {
+                jirafeau_delete_link($_POST['link']);
+            }
             echo '<div class="message">' . NL;
             echo '<p>' . t('LINK_DELETED') . '</p></div>';
         } elseif (strcmp($_POST['action'], 'delete_file') == 0) {
-            $count = jirafeau_delete_file($_POST['hash']);
+            $count = 0;
+            if (isset($_POST['hash']) && is_string($_POST['hash'])) {
+                $count = jirafeau_delete_file($_POST['hash']);
+            }
             echo '<div class="message">' . NL;
             echo '<p>' . t('DELETED_LINKS') . ' : ' . $count . '</p></div>';
         } elseif (strcmp($_POST['action'], 'download') == 0) {
+            if (!isset($_POST['link']) || !is_string($_POST['link'])) {
+                exit;
+            }
             $l = jirafeau_get_link($_POST['link']);
             if (!count($l)) {
                 return;
             }
             $p = s2p($l['hash']);
+            jirafeau_send_security_headers(false);
             header('Content-Length: ' . $l['file_size']);
-            header('Content-Type: ' . $l['mime_type']);
-            header('Content-Disposition: attachment; filename="' .
-                  $l['file_name'] . '"');
+            header('Content-Type: ' . jirafeau_sanitize_mime_type($l['mime_type']));
+            jirafeau_content_disposition_header($l['file_name'], true);
             if (file_exists(VAR_FILES . $p . $l['hash'])) {
                 $r = fopen(VAR_FILES . $p . $l['hash'], 'r');
                 while (!feof($r)) {
