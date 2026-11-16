@@ -530,20 +530,16 @@ function jirafeau_delete_link($link)
 }
 
 /**
- * Atomically adjust a stored file reference counter under an exclusive lock.
- * When the counter reaches 0, the payload is removed while the lock is still held
- * so a concurrent deduplicated upload cannot revive a half-deleted file.
- *
- * @return int|false new counter value, or false on lock/IO failure
+ * Open and exclusively lock the refcount file for a stored payload.
+ * @return resource|false
  */
-function jirafeau_file_refcount_adjust($hash, $delta)
+function jirafeau_file_refcount_lock($hash)
 {
     if (!is_string($hash) || $hash === '') {
         return false;
     }
     $p = s2p($hash);
-    $payload = VAR_FILES . $p . $hash;
-    $count_file = $payload . '_count';
+    $count_file = VAR_FILES . $p . $hash . '_count';
     $dir = dirname($count_file);
     if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
         return false;
@@ -556,17 +552,49 @@ function jirafeau_file_refcount_adjust($hash, $delta)
         fclose($fp);
         return false;
     }
+    return $fp;
+}
+
+function jirafeau_file_refcount_read($fp)
+{
+    rewind($fp);
     $raw = stream_get_contents($fp);
-    $counter = ($raw === false || trim((string) $raw) === '') ? 0 : (int) trim($raw);
-    $counter += (int) $delta;
-    if ($counter < 0) {
-        $counter = 0;
-    }
+    return ($raw === false || trim((string) $raw) === '') ? 0 : (int) trim($raw);
+}
+
+function jirafeau_file_refcount_write_unlocked($fp, $counter)
+{
     ftruncate($fp, 0);
     rewind($fp);
     if ($counter > 0) {
         fwrite($fp, (string) $counter);
         fflush($fp);
+    }
+}
+
+/**
+ * Atomically adjust a stored file reference counter under an exclusive lock.
+ * When the counter reaches 0, the payload is removed while the lock is still held
+ * so a concurrent deduplicated upload cannot revive a half-deleted file.
+ *
+ * @return int|false new counter value, or false on lock/IO failure
+ */
+function jirafeau_file_refcount_adjust($hash, $delta)
+{
+    $fp = jirafeau_file_refcount_lock($hash);
+    if ($fp === false) {
+        return false;
+    }
+    $p = s2p($hash);
+    $payload = VAR_FILES . $p . $hash;
+    $count_file = $payload . '_count';
+    $counter = jirafeau_file_refcount_read($fp);
+    $counter += (int) $delta;
+    if ($counter < 0) {
+        $counter = 0;
+    }
+    if ($counter > 0) {
+        jirafeau_file_refcount_write_unlocked($fp, $counter);
         flock($fp, LOCK_UN);
         fclose($fp);
     } else {
@@ -574,6 +602,7 @@ function jirafeau_file_refcount_adjust($hash, $delta)
         if (is_file($payload)) {
             @unlink($payload);
         }
+        jirafeau_file_refcount_write_unlocked($fp, 0);
         flock($fp, LOCK_UN);
         fclose($fp);
         @unlink($count_file);
@@ -588,6 +617,77 @@ function jirafeau_file_refcount_adjust($hash, $delta)
         }
     }
     return $counter;
+}
+
+/**
+ * Under one exclusive lock: ensure the payload exists (install from $src_path if
+ * needed) and increment the reference counter. Prevents "counter without file"
+ * races with concurrent deletes.
+ *
+ * @param string $hash content hash / storage id
+ * @param string $src_path temporary source file
+ * @param string $install_mode move_uploaded_file|rename|symlink|copy
+ * @return int|false new counter value
+ */
+function jirafeau_file_commit_payload($hash, $src_path, $install_mode = 'rename')
+{
+    $fp = jirafeau_file_refcount_lock($hash);
+    if ($fp === false) {
+        return false;
+    }
+    $p = s2p($hash);
+    $payload = VAR_FILES . $p . $hash;
+    $installed = false;
+    try {
+        if (!is_file($payload)) {
+            if (!is_string($src_path) || !is_file($src_path)) {
+                return false;
+            }
+            $dir = dirname($payload);
+            if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+                return false;
+            }
+            switch ($install_mode) {
+                case 'move_uploaded_file':
+                    $installed = @move_uploaded_file($src_path, $payload);
+                    break;
+                case 'symlink':
+                    $installed = @symlink($src_path, $payload);
+                    break;
+                case 'copy':
+                    $installed = @copy($src_path, $payload);
+                    if ($installed) {
+                        @unlink($src_path);
+                    }
+                    break;
+                case 'rename':
+                default:
+                    $installed = @rename($src_path, $payload);
+                    break;
+            }
+            if (!$installed || !is_file($payload)) {
+                return false;
+            }
+        } else {
+            // Deduplicated hit: drop the spare source while still locked.
+            if (is_string($src_path) && is_file($src_path)) {
+                $src_real = @realpath($src_path);
+                $dst_real = @realpath($payload);
+                if ($src_real === false || $dst_real === false || $src_real !== $dst_real) {
+                    @unlink($src_path);
+                }
+            }
+        }
+        if (!is_file($payload)) {
+            return false;
+        }
+        $counter = jirafeau_file_refcount_read($fp) + 1;
+        jirafeau_file_refcount_write_unlocked($fp, $counter);
+        return $counter;
+    } finally {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    }
 }
 
 /**
@@ -749,9 +849,6 @@ function jirafeau_handle_add_file_encryption($crypt_module_enabled, $file_path)
  */
 function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, $link_name_length, $file_hash_method, $is_upload = true)
 {
-    // TODO needs to be adapted
-    $move_operation = $is_upload ? 'move_uploaded_file' : 'symlink';
-
     /* array representing no error */
     $noerr = array('has_error' => false, 'why' => '');
 
@@ -765,27 +862,9 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
     $mime_type = jirafeau_sanitize_mime_type($file['type']);
     $size = $file['size'];
 
-    /* does file already exist ? */
-    $rc = false;
-    $p = s2p("$hash");
-    if (file_exists(VAR_FILES . $p .  $hash)) {
-        $rc = unlink($file['tmp_name']);
-    } elseif (
-        (file_exists(VAR_FILES . $p) || @mkdir(VAR_FILES . $p, 0755, true)) &&
-        $move_operation($file['tmp_name'], VAR_FILES . $p . $hash)) {
-        $rc = true;
-    }
-    if (!$rc) {
-        return (array(
-                 'error' =>
-                   array('has_error' => true,
-                          'why' => t('INTERNAL_ERROR_DEL')),
-                 'link' => '',
-                 'delete_link' => ''));
-    }
-
-    /* Increment or create count file (locked). */
-    if (jirafeau_file_refcount_adjust($hash, 1) === false) {
+    /* Dedup + install + refcount under one lock (avoids counter without payload). */
+    $install_mode = $is_upload ? 'move_uploaded_file' : 'symlink';
+    if (jirafeau_file_commit_payload($hash, $file['tmp_name'], $install_mode) === false) {
         return (array(
                  'error' =>
                    array('has_error' => true,
@@ -1663,21 +1742,10 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
         }
 
         $hash = jirafeau_hash_file($file_hash_method, $p);
-        $np = s2p($hash);
         $delete_link_code = jirafeau_gen_random(JIRAFEAU_DELETE_CODE_LENGTH);
 
-        /* File already exist ? */
-        if (!file_exists(VAR_FILES . $np)) {
-            @mkdir(VAR_FILES . $np, 0755, true);
-        }
-        if (!file_exists(VAR_FILES . $np . $hash)) {
-            rename($p, VAR_FILES . $np . $hash);
-        } else {
-            // Deduplicated: drop the async payload copy.
-            @unlink($p);
-        }
-
-        if (jirafeau_file_refcount_adjust($hash, 1) === false) {
+        /* Install/dedup payload and bump refcount under one lock. */
+        if (jirafeau_file_commit_payload($hash, $p, 'rename') === false) {
             return "Error: cannot update file reference counter";
         }
 
@@ -2226,8 +2294,15 @@ function jirafeau_cleanup_link_dirs($start_dir)
 
 /**
  * Finalize a claimed one-time link exactly once across processes.
- * Only the winner of the claimed→finishing rename may decrement the refcount.
- * After decrement, the file is renamed to *.done so cleaners never decrement twice.
+ *
+ * Order matters for crash safety:
+ * 1) claimed → finishing (exclusive winner)
+ * 2) finishing → finishing.done (publish "do not decrement again")
+ * 3) decrement refcount
+ * 4) unlink .done
+ *
+ * If we crash after (2) and before (3), cleaners only unlink .done (refcount leak,
+ * file retained). Never decrement twice.
  *
  * @return bool true when this caller performed finalization
  */
@@ -2236,8 +2311,8 @@ function jirafeau_finalize_onetime_claim($claimed_path, $link)
     if (!is_string($claimed_path) || $claimed_path === '') {
         return false;
     }
-    // Accept either the active claim or a crash mid-finalize finishing file.
     $basename = basename($claimed_path);
+    // Already marked done: cleaner/resume must never decrement again.
     if (preg_match('/\.finishing-[0-9a-f]+\.done$/', $basename)) {
         @unlink($claimed_path);
         jirafeau_cleanup_link_dirs(dirname($claimed_path));
@@ -2257,11 +2332,19 @@ function jirafeau_finalize_onetime_claim($claimed_path, $link)
         return false;
     }
 
+    $done = $finishing . '.done';
+    // Mark completion BEFORE decrement so crash recovery cannot double-decrement.
+    if (!@rename($finishing, $done)) {
+        // Another worker may have won; if .done exists, treat as already handled.
+        if (is_file($done)) {
+            return false;
+        }
+        return false;
+    }
+
     if (is_array($link) && !empty($link['hash'])) {
         jirafeau_file_refcount_adjust($link['hash'], -1);
     }
-    $done = $finishing . '.done';
-    @rename($finishing, $done);
     @unlink($done);
     jirafeau_cleanup_link_dirs(dirname($claimed_path));
     return true;
