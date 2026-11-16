@@ -186,6 +186,73 @@ jirafeau_file_refcount_adjust($alone, -1);
 expect_true(!is_file($payload_alone), 'payload removed when refcount hits zero');
 expect_true(!is_file($payload_alone . '_count'), 'count file removed at zero');
 
+echo "== Upload/delete interleave cannot create counter without file ==\n";
+$race = str_repeat('f', 32);
+$race_payload = VAR_FILES . s2p($race) . $race;
+@mkdir(dirname($race_payload), 0700, true);
+file_put_contents($race_payload, 'original');
+jirafeau_file_refcount_adjust($race, 1);
+$src = $var_root . 'upload-src.bin';
+file_put_contents($src, 'replacement-not-used-on-dedup');
+// Simulate delete winning first under the same locking API used in production.
+jirafeau_file_refcount_adjust($race, -1);
+expect_true(!is_file($race_payload), 'delete removed payload');
+// Concurrent-style commit must reinstall payload before incrementing.
+$new_count = jirafeau_file_commit_payload($race, $src, 'rename');
+expect_eq($new_count, 1, 'commit after delete restores refcount to 1');
+expect_true(is_file($race_payload), 'commit after delete restores payload');
+expect_true(!is_file($src), 'source consumed or removed');
+
+// Opposite order: commit while file exists (dedup), then ensure payload remains.
+$src2 = $var_root . 'upload-src2.bin';
+file_put_contents($src2, 'dedup-src');
+expect_eq(jirafeau_file_commit_payload($race, $src2, 'rename'), 2, 'dedup commit increments');
+expect_true(is_file($race_payload), 'dedup keeps existing payload');
+expect_true(!is_file($src2), 'dedup drops spare source');
+
+echo "== Finalize crash markers are idempotent ==\n";
+$fin_hash = str_repeat('1', 32);
+@mkdir(VAR_FILES . s2p($fin_hash), 0700, true);
+file_put_contents(VAR_FILES . s2p($fin_hash) . $fin_hash, 'keep-me');
+jirafeau_file_refcount_adjust($fin_hash, 1);
+jirafeau_file_refcount_adjust($fin_hash, 1); // shared: 2
+$claim_base = VAR_LINKS . s2p('finishcrash') . 'finishcrash';
+@mkdir(dirname($claim_base), 0700, true);
+$link_meta = array('hash' => $fin_hash);
+
+// Crash window A: .done exists and decrement already applied once.
+$finishing = $claim_base . '.claimed-aabbccdd.finishing-dead';
+file_put_contents($finishing, "name\nmime\n7\n\n-1\n{$fin_hash}\nO\n0\n\ncode\nO\n");
+$done = $finishing . '.done';
+rename($finishing, $done);
+jirafeau_file_refcount_adjust($fin_hash, -1); // real decrement -> 1
+$again = jirafeau_finalize_onetime_claim($done, $link_meta);
+expect_true($again === false, 'resume on .done does not finalize again');
+$count_fin = (int) trim(@file_get_contents(VAR_FILES . s2p($fin_hash) . $fin_hash . '_count'));
+expect_eq($count_fin, 1, 'post-decrement .done resume does not double-decrement');
+expect_true(is_file(VAR_FILES . s2p($fin_hash) . $fin_hash), 'shared payload retained after .done resume');
+
+// Crash window B: finishing→done happened, decrement never ran (safe leak).
+@mkdir(dirname($claim_base), 0700, true);
+$finishing3 = $claim_base . '.claimed-ccddeeff.finishing-cafe';
+file_put_contents($finishing3, "name\nmime\n7\n\n-1\n{$fin_hash}\nO\n0\n\ncode\nO\n");
+$done3 = $finishing3 . '.done';
+rename($finishing3, $done3);
+$resume = jirafeau_finalize_onetime_claim($done3, $link_meta);
+expect_true($resume === false, 'done-before-decrement marker skips decrement');
+$count_fin3 = (int) trim(@file_get_contents(VAR_FILES . s2p($fin_hash) . $fin_hash . '_count'));
+expect_eq($count_fin3, 1, 'done-before-decrement keeps existing count (safe leak)');
+expect_true(is_file(VAR_FILES . s2p($fin_hash) . $fin_hash), 'payload kept on done-before-decrement crash');
+
+// Normal finishing (no .done yet) still decrements exactly once.
+@mkdir(dirname($claim_base), 0700, true);
+$finishing2 = $claim_base . '.claimed-bbccddee.finishing-beef';
+file_put_contents($finishing2, "name\nmime\n7\n\n-1\n{$fin_hash}\nO\n0\n\ncode\nO\n");
+$one = jirafeau_finalize_onetime_claim($finishing2, $link_meta);
+expect_true($one === true, 'finalize of finishing performs single decrement');
+$count_fin2 = @file_get_contents(VAR_FILES . s2p($fin_hash) . $fin_hash . '_count');
+expect_true($count_fin2 === false || trim((string) $count_fin2) === '' || (int) trim($count_fin2) === 0, 'last finalize reaches zero refs');
+
 echo "== Auth throttle (no sleep, block before verify) ==\n";
 $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
 $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
