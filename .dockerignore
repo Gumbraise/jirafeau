@@ -8,3 +8,13 @@ README.md
 composer.json
 install.php
 .*
+jirafeau_data
+jirafeau_data/**
+.env
+.env.*
+!.env.example
+tests
+docs
+vendor
+.git
+.gitignore
