@@ -1,4 +1,5 @@
-#!/bin/sh -e
+#!/bin/sh
+set -e
 sleep 10 # avoid running cleaning before first setup
 while true
 do

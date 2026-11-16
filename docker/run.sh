@@ -1,4 +1,5 @@
-#!/bin/sh -e
+#!/bin/sh
+set -e
 /cleanup.sh &
 php-fpm -D
 php /docker_config.php
