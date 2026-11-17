@@ -25,6 +25,10 @@ if (!defined('JIRAFEAU_DELETE_CODE_LENGTH')) {
 if (!defined('JIRAFEAU_ASYNC_CODE_LENGTH')) {
     define('JIRAFEAU_ASYNC_CODE_LENGTH', 16);
 }
+/* Prefix for Sodium ciphertext that requires an authenticated TAG_FINAL end. */
+if (!defined('JIRAFEAU_CRYPT_MAGIC_V1')) {
+    define('JIRAFEAU_CRYPT_MAGIC_V1', 'JFCR1');
+}
 
 /**
  * Transform a string in a path by separating each letters by a '/'.
@@ -1478,6 +1482,7 @@ function jirafeau_admin_clean_async()
             }
         }
     }
+    jirafeau_async_slots_reconcile();
     return $count;
 }
 
@@ -1695,8 +1700,9 @@ function jirafeau_async_delete($ref, $held_lock = null)
     }
     $p = s2p("$ref");
     $lock_path = jirafeau_async_lock_path($ref);
+    $had_meta = is_file(VAR_ASYNC . $p . $ref);
     try {
-        if (file_exists(VAR_ASYNC . $p . $ref)) {
+        if ($had_meta) {
             unlink(VAR_ASYNC . $p . $ref);
         }
         if (file_exists(VAR_ASYNC . $p . $ref . '_data')) {
@@ -1710,6 +1716,9 @@ function jirafeau_async_delete($ref, $held_lock = null)
             jirafeau_async_release_lock($lock);
             @unlink($lock_path);
         }
+    }
+    if ($had_meta) {
+        jirafeau_async_slot_release();
     }
     $parse = VAR_ASYNC . $p;
     $scan = array();
@@ -1752,6 +1761,148 @@ function jirafeau_count_async_transfers()
         }
     }
     return $count;
+}
+
+/**
+ * Path for the global upload quota lock (concurrent slots + storage checks).
+ */
+function jirafeau_quota_lock_path()
+{
+    $base = defined('VAR_FILES') ? dirname(rtrim(VAR_FILES, '/\\')) : sys_get_temp_dir();
+    return $base . DIRECTORY_SEPARATOR . 'upload_quota.lock';
+}
+
+/**
+ * Path for the atomic async slot counter.
+ */
+function jirafeau_async_slots_path()
+{
+    $base = defined('VAR_FILES') ? dirname(rtrim(VAR_FILES, '/\\')) : sys_get_temp_dir();
+    return $base . DIRECTORY_SEPARATOR . 'async_slots';
+}
+
+/**
+ * Acquire the global quota lock. Caller must unlock.
+ *
+ * @return resource|false
+ */
+function jirafeau_quota_lock()
+{
+    $path = jirafeau_quota_lock_path();
+    $fp = @fopen($path, 'c+');
+    if (!$fp || !flock($fp, LOCK_EX)) {
+        if ($fp) {
+            fclose($fp);
+        }
+        return false;
+    }
+    return $fp;
+}
+
+function jirafeau_quota_unlock($fp)
+{
+    if ($fp) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    }
+}
+
+/**
+ * Bytes used by stored files and async temp data.
+ */
+function jirafeau_storage_used_bytes()
+{
+    $used = 0;
+    if (defined('VAR_FILES') && is_dir(VAR_FILES)) {
+        $used += jirafeau_dir_size(VAR_FILES);
+    }
+    if (defined('VAR_ASYNC') && is_dir(VAR_ASYNC)) {
+        $used += jirafeau_dir_size(VAR_ASYNC);
+    }
+    return $used;
+}
+
+/**
+ * Read async slot counter (caller must hold quota lock).
+ */
+function jirafeau_async_slots_read_unlocked()
+{
+    $path = jirafeau_async_slots_path();
+    if (!is_file($path)) {
+        return 0;
+    }
+    $raw = @file_get_contents($path);
+    return max(0, (int) trim((string) $raw));
+}
+
+/**
+ * Write async slot counter (caller must hold quota lock).
+ */
+function jirafeau_async_slots_write_unlocked($count)
+{
+    $path = jirafeau_async_slots_path();
+    @file_put_contents($path, (string) max(0, (int) $count), LOCK_EX);
+}
+
+/**
+ * Reserve one concurrent async slot (caller must hold quota lock).
+ * Always increments the counter on success so delete can decrement symmetrically.
+ * When $max_async > 0, refuses if the ceiling would be exceeded.
+ *
+ * @return bool
+ */
+function jirafeau_async_slot_reserve_unlocked($max_async)
+{
+    $max_async = (int) $max_async;
+    $count = jirafeau_async_slots_read_unlocked();
+    // Heal under-count using on-disk transfers before enforcing the ceiling.
+    $live = jirafeau_count_async_transfers();
+    if ($live > $count) {
+        $count = $live;
+    }
+    if ($max_async > 0 && $count >= $max_async) {
+        jirafeau_async_slots_write_unlocked($count);
+        return false;
+    }
+    jirafeau_async_slots_write_unlocked($count + 1);
+    return true;
+}
+
+/**
+ * Release one concurrent async slot.
+ */
+function jirafeau_async_slot_release()
+{
+    $fp = jirafeau_quota_lock();
+    if ($fp === false) {
+        return;
+    }
+    try {
+        $count = jirafeau_async_slots_read_unlocked();
+        jirafeau_async_slots_write_unlocked(max(0, $count - 1));
+    } finally {
+        jirafeau_quota_unlock($fp);
+    }
+}
+
+/**
+ * Reconcile slot counter with live async metas (caller may hold quota lock).
+ */
+function jirafeau_async_slots_reconcile()
+{
+    $own = false;
+    $fp = jirafeau_quota_lock();
+    if ($fp === false) {
+        return;
+    }
+    $own = true;
+    try {
+        jirafeau_async_slots_write_unlocked(jirafeau_count_async_transfers());
+    } finally {
+        if ($own) {
+            jirafeau_quota_unlock($fp);
+        }
+    }
 }
 
 /**
@@ -1800,35 +1951,54 @@ function jirafeau_async_rate_allow($cfg, $ip)
 }
 
 /**
+ * Quota checks without taking the global lock (caller must hold it when racing).
+ *
+ * @return true|string
+ */
+function jirafeau_upload_quota_check_unlocked($cfg, $ip = null, $additional_bytes = 0)
+{
+    if (!is_array($cfg)) {
+        return true;
+    }
+    $max_async = isset($cfg['max_concurrent_async']) ? (int) $cfg['max_concurrent_async'] : 0;
+    if ($max_async > 0) {
+        $slots = jirafeau_async_slots_read_unlocked();
+        $live = jirafeau_count_async_transfers();
+        if (max($slots, $live) >= $max_async) {
+            return 'Error: too many concurrent transfers';
+        }
+    }
+    if ($ip !== null && !jirafeau_async_rate_allow($cfg, $ip)) {
+        return 'Error: transfer creation rate exceeded';
+    }
+    $max_storage = isset($cfg['max_storage_bytes']) ? (int) $cfg['max_storage_bytes'] : 0;
+    if ($max_storage > 0) {
+        $used = jirafeau_storage_used_bytes();
+        if (($used + max(0, (int) $additional_bytes)) > $max_storage) {
+            return 'Error: storage quota exceeded';
+        }
+    }
+    return true;
+}
+
+/**
  * Server-side upload abuse checks before creating a new transfer.
  * Distinguishes concurrent async sessions, init frequency, and total storage.
  * Does not silently force upload authentication on public instances.
  *
  * @return true|string true or Error string
  */
-function jirafeau_upload_quota_check($cfg, $ip = null)
+function jirafeau_upload_quota_check($cfg, $ip = null, $additional_bytes = 0)
 {
-    if (!is_array($cfg)) {
-        return true;
+    $lock = jirafeau_quota_lock();
+    if ($lock === false) {
+        return 'Error: quota lock unavailable';
     }
-    $max_async = isset($cfg['max_concurrent_async']) ? (int) $cfg['max_concurrent_async'] : 0;
-    if ($max_async > 0 && jirafeau_count_async_transfers() >= $max_async) {
-        return 'Error: too many concurrent transfers';
+    try {
+        return jirafeau_upload_quota_check_unlocked($cfg, $ip, $additional_bytes);
+    } finally {
+        jirafeau_quota_unlock($lock);
     }
-    if ($ip !== null && !jirafeau_async_rate_allow($cfg, $ip)) {
-        return 'Error: transfer creation rate exceeded';
-    }
-    $max_storage = isset($cfg['max_storage_bytes']) ? (int) $cfg['max_storage_bytes'] : 0;
-    if ($max_storage > 0 && defined('VAR_FILES') && is_dir(VAR_FILES)) {
-        $used = jirafeau_dir_size(VAR_FILES);
-        if (defined('VAR_ASYNC') && is_dir(VAR_ASYNC)) {
-            $used += jirafeau_dir_size(VAR_ASYNC);
-        }
-        if ($used >= $max_storage) {
-            return 'Error: storage quota exceeded';
-        }
-    }
-    return true;
 }
 
 /**
@@ -1902,44 +2072,63 @@ function jirafeau_reject_browser_cross_site_upload($cfg)
 function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
 {
     global $cfg;
-    $quota = jirafeau_upload_quota_check($cfg, $ip);
-    if ($quota !== true) {
-        return $quota;
+    $qlock = jirafeau_quota_lock();
+    if ($qlock === false) {
+        return 'Error: quota lock unavailable';
     }
+    $slot_reserved = false;
+    try {
+        $max_async = isset($cfg['max_concurrent_async']) ? (int) $cfg['max_concurrent_async'] : 0;
+        // Rate + storage under the same lock as slot reservation.
+        if ($ip !== null && !jirafeau_async_rate_allow($cfg, $ip)) {
+            return 'Error: transfer creation rate exceeded';
+        }
+        $max_storage = isset($cfg['max_storage_bytes']) ? (int) $cfg['max_storage_bytes'] : 0;
+        if ($max_storage > 0 && jirafeau_storage_used_bytes() > $max_storage) {
+            return 'Error: storage quota exceeded';
+        }
+        if (!jirafeau_async_slot_reserve_unlocked($max_async)) {
+            return 'Error: too many concurrent transfers';
+        }
+        $slot_reserved = true;
 
-    /* Create temporary folder. */
-    $ref = '';
-    $p = '';
-    $code = jirafeau_gen_random(JIRAFEAU_ASYNC_CODE_LENGTH);
-    do {
-        $ref = jirafeau_gen_random(JIRAFEAU_ASYNC_REF_LENGTH);
-        $p = VAR_ASYNC . s2p($ref);
-    } while (file_exists($p));
-    @mkdir($p, 0755, true);
-    if (!file_exists($p)) {
-        return 'Error: cannot create async folder.';
+        /* Create temporary folder. */
+        $ref = '';
+        $p = '';
+        $code = jirafeau_gen_random(JIRAFEAU_ASYNC_CODE_LENGTH);
+        do {
+            $ref = jirafeau_gen_random(32);
+            $p = VAR_ASYNC . s2p($ref);
+        } while (file_exists($p));
+        @mkdir($p, 0755, true);
+        if (!file_exists($p)) {
+            jirafeau_async_slots_write_unlocked(max(0, jirafeau_async_slots_read_unlocked() - 1));
+            return 'Error: cannot create async folder.';
+        }
+
+        /* touch empty data file */
+        $w_path = $p . $ref . '_data';
+        touch($w_path);
+
+        /* hashed download password or empty */
+        $password = jirafeau_store_download_password($key);
+
+        /* Store information. */
+        $p .= $ref;
+        $handle = fopen($p, 'w');
+        fwrite(
+            $handle,
+            str_replace(NL, '', trim($filename)) . NL .
+                jirafeau_sanitize_mime_type(str_replace(NL, '', trim($type))) . NL . $password . NL .
+                $time . NL . ($one_time ? 'O' : 'R') . NL . $ip . NL .
+                time() . NL . $code . NL
+        );
+        fclose($handle);
+
+        return $ref . NL . $code ;
+    } finally {
+        jirafeau_quota_unlock($qlock);
     }
-
-    /* touch empty data file */
-    $w_path = $p . $ref . '_data';
-    touch($w_path);
-
-    /* hashed download password or empty */
-    $password = jirafeau_store_download_password($key);
-
-    /* Store information. */
-    $p .= $ref;
-    $handle = fopen($p, 'w');
-    fwrite(
-        $handle,
-        str_replace(NL, '', trim($filename)) . NL .
-            jirafeau_sanitize_mime_type(str_replace(NL, '', trim($type))) . NL . $password . NL .
-            $time . NL . ($one_time ? 'O' : 'R') . NL . $ip . NL .
-            time() . NL . $code . NL
-    );
-    fclose($handle);
-
-    return $ref . NL . $code ;
 }
 
 /**
@@ -1994,25 +2183,51 @@ function jirafeau_async_push($ref, $data, $code, $max_file_size)
         $w_path = VAR_ASYNC . $p . $ref . '_data';
 
         /* Check that file size is not above upload limit. */
+        $chunk_size = @filesize($r_path);
+        if ($chunk_size === false) {
+            return "Error: cannot read upload size";
+        }
         if ($max_file_size > 0 &&
-            filesize($r_path) + filesize($w_path) > $max_file_size * 1024 * 1024) {
+            $chunk_size + filesize($w_path) > $max_file_size * 1024 * 1024) {
             jirafeau_async_delete($ref, $lock);
             return "Error: file size is above upload limit";
+        }
+
+        /* Enforce storage quota while holding the global lock around the write. */
+        global $cfg;
+        $max_storage = (is_array($cfg) && isset($cfg['max_storage_bytes']))
+            ? (int) $cfg['max_storage_bytes'] : 0;
+        $qlock = false;
+        if ($max_storage > 0) {
+            $qlock = jirafeau_quota_lock();
+            if ($qlock === false) {
+                return "Error: quota lock unavailable";
+            }
+            if ((jirafeau_storage_used_bytes() + $chunk_size) > $max_storage) {
+                jirafeau_quota_unlock($qlock);
+                return "Error: storage quota exceeded";
+            }
         }
 
         /* Concatenate data. */
         $r = fopen($r_path, 'r');
         $w = fopen($w_path, 'a');
+        $write_ok = true;
         while (!feof($r)) {
             if (fwrite($w, fread($r, 1024)) === false) {
-                fclose($r);
-                fclose($w);
-                jirafeau_async_delete($ref, $lock);
-                return "Error: cannot write file";
+                $write_ok = false;
+                break;
             }
         }
         fclose($r);
         fclose($w);
+        if ($qlock) {
+            jirafeau_quota_unlock($qlock);
+        }
+        if (!$write_ok) {
+            jirafeau_async_delete($ref, $lock);
+            return "Error: cannot write file";
+        }
         unlink($r_path);
 
         /* Update async file. */
@@ -2151,9 +2366,14 @@ function jirafeau_encrypt_file($fp_src, $fp_dst)
     $crypt_key = bin2hex(random_bytes(SODIUM_CRYPTO_STREAM_XCHACHA20_KEYBYTES / 2));
     /* Init module. */
     [$crypt_state, $crypt_header] = sodium_crypto_secretstream_xchacha20poly1305_init_push($crypt_key);
-    /* Crypt file. */
+    /* Crypt file (v1: magic + secretstream with authenticated TAG_FINAL). */
     $r = fopen($fp_src, 'rb');
     $w = fopen($fp_dst, 'wb');
+    if (fwrite($w, JIRAFEAU_CRYPT_MAGIC_V1) === false) {
+        fclose($r);
+        fclose($w);
+        return '';
+    }
     fwrite($w, $crypt_header);
 
     for ($i = 0; $i < $fs; $i += JIRAFEAU_SODIUM_CHUNKSIZE) {
@@ -2196,15 +2416,51 @@ function jirafeau_crypt_key_is_valid($k)
  *
  * @return bool
  */
+/**
+ * Read the secretstream header, detecting JFCR1 (v1) vs legacy Sodium layout.
+ *
+ * @param resource $r open binary handle at start of file
+ * @param int $fs file size
+ * @return array{0:bool,1:string}|false [is_v1, header] or false
+ */
+function jirafeau_crypt_read_header($r, $fs)
+{
+    $header_len = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES;
+    $magic_len = strlen(JIRAFEAU_CRYPT_MAGIC_V1);
+    if ($fs <= $header_len) {
+        return false;
+    }
+    $prefix = fread($r, $magic_len);
+    if ($prefix === false) {
+        return false;
+    }
+    if ($prefix === JIRAFEAU_CRYPT_MAGIC_V1) {
+        if ($fs <= $magic_len + $header_len) {
+            return false;
+        }
+        $crypt_header = fread($r, $header_len);
+        if ($crypt_header === false || strlen($crypt_header) !== $header_len) {
+            return false;
+        }
+        return array(true, $crypt_header);
+    }
+    // Legacy: prefix bytes are the start of the secretstream header.
+    $need = $header_len - strlen($prefix);
+    $rest = $need > 0 ? fread($r, $need) : '';
+    if ($rest === false || strlen($prefix) + strlen($rest) !== $header_len) {
+        return false;
+    }
+    return array(false, $prefix . $rest);
+}
+
 function jirafeau_probe_decrypt_key($fp_src, $k)
 {
     if (!jirafeau_crypt_key_is_valid($k)) {
         return false;
     }
     $fs = @filesize($fp_src);
-    $header_len = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES;
     $chunk_len = JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES;
-    if ($fs === false || $fs <= $header_len || !is_readable($fp_src)) {
+    if ($fs === false || $fs <= 0 || !is_readable($fp_src)) {
         return false;
     }
     $r = @fopen($fp_src, 'rb');
@@ -2212,11 +2468,12 @@ function jirafeau_probe_decrypt_key($fp_src, $k)
         return false;
     }
     try {
-        $crypt_header = fread($r, $header_len);
-        if ($crypt_header === false || strlen($crypt_header) !== $header_len) {
+        $hdr = jirafeau_crypt_read_header($r, $fs);
+        if ($hdr === false) {
             fclose($r);
             return false;
         }
+        [, $crypt_header] = $hdr;
         $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
         $to_dec = fread($r, $chunk_len);
         fclose($r);
@@ -2239,10 +2496,13 @@ function jirafeau_probe_decrypt_key($fp_src, $k)
 
 /**
  * Decrypt file using Sodium.
+ * v1 (magic JFCR1): requires authenticated TAG_FINAL and rejects trailing bytes.
+ * Legacy (no magic): accepts streams without TAG_FINAL only when every byte is consumed.
+ *
  * @param $fp_src file path to the file to decrypt.
  * @param $fp_dst file path to the file to write decrypted file (must not be the same).
  * @param $k decryption key
- * @return true if decryption succeeded (including TAG_FINAL), false otherwise
+ * @return true if decryption succeeded, false otherwise
  */
 function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
 {
@@ -2254,11 +2514,7 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
         return false;
     }
 
-    $header_len = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES;
     $chunk_len = JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES;
-    if ($fs <= $header_len) {
-        return false;
-    }
 
     $r = @fopen($fp_src, 'rb');
     $w = @fopen($fp_dst, 'wb');
@@ -2274,20 +2530,27 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
 
     $crypt_state = null;
     $saw_final = false;
-    $consumed = $header_len;
+    $is_v1 = false;
     try {
-        $crypt_header = fread($r, $header_len);
-        if ($crypt_header === false || strlen($crypt_header) !== $header_len) {
-            throw new RuntimeException('short header');
+        $hdr = jirafeau_crypt_read_header($r, $fs);
+        if ($hdr === false) {
+            throw new RuntimeException('bad header');
         }
+        [$is_v1, $crypt_header] = $hdr;
         $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
 
-        for ($i = $header_len; $i < $fs; $i += $chunk_len) {
+        while (!feof($r)) {
             $to_dec = fread($r, $chunk_len);
-            if ($to_dec === false || $to_dec === '') {
+            if ($to_dec === false) {
+                throw new RuntimeException('read failed');
+            }
+            if ($to_dec === '') {
+                break;
+            }
+            // Incomplete final ciphertext frame is a truncation / corruption.
+            if (strlen($to_dec) < SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES) {
                 throw new RuntimeException('truncated ciphertext');
             }
-            $consumed += strlen($to_dec);
             $result = sodium_crypto_secretstream_xchacha20poly1305_pull($crypt_state, $to_dec);
             if ($result === false) {
                 throw new RuntimeException('pull failed');
@@ -2299,6 +2562,29 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
             if ($crypt_tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL) {
                 $saw_final = true;
                 break;
+            }
+        }
+
+        if ($is_v1) {
+            if (!$saw_final) {
+                throw new RuntimeException('missing authenticated final tag');
+            }
+            $extra = fread($r, 1);
+            if ($extra !== false && $extra !== '') {
+                throw new RuntimeException('trailing ciphertext after final');
+            }
+        } else {
+            // Legacy: no magic; require full consumption without trailing unread bytes.
+            if ($saw_final) {
+                $extra = fread($r, 1);
+                if ($extra !== false && $extra !== '') {
+                    throw new RuntimeException('trailing ciphertext after final');
+                }
+            } else {
+                $pos = ftell($r);
+                if ($pos === false || $pos !== $fs) {
+                    throw new RuntimeException('incomplete legacy stream');
+                }
             }
         }
     } catch (Throwable $e) {
@@ -2317,15 +2603,6 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
     fclose($w);
     if (is_string($crypt_state)) {
         sodium_memzero($crypt_state);
-    }
-
-    // Prefer TAG_FINAL (new streams). Legacy ciphertext without an explicit final
-    // tag is accepted only when every byte was consumed and every pull succeeded.
-    if (!$saw_final && $consumed < $fs) {
-        if (is_string($fp_dst) && strpos($fp_dst, 'php://') !== 0 && is_file($fp_dst)) {
-            @unlink($fp_dst);
-        }
-        return false;
     }
 
     return true;
@@ -3156,37 +3433,60 @@ function jirafeau_export_cfg($cfg, $fatal_on_error = true)
         ? JIRAFEAU_CFG
         : (defined('JIRAFEAU_ROOT') ? JIRAFEAU_ROOT . 'lib/config.local.php' : 'lib/config.local.php');
 
-    $dir = dirname($cfg_path);
     $lock_path = $cfg_path . '.lock';
     $tmp_path = $cfg_path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
     $lock = @fopen($lock_path, 'c');
-    if ($lock && !flock($lock, LOCK_EX)) {
-        fclose($lock);
-        $lock = false;
+    // Non-blocking: never hang a request waiting on config I/O, and never
+    // proceed without the lock (which could delete/replace the live file).
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+        if ($lock) {
+            fclose($lock);
+        }
+        error_log('Jirafeau: failed to lock configuration for write at ' . $cfg_path);
+        if ($fatal_on_error) {
+            jirafeau_fatal_error(t('Can not write local configuration file'));
+        }
+        return false;
     }
 
     $ok = false;
-    if (@file_put_contents($tmp_path, $content) !== false) {
-        // rename is atomic on the same filesystem.
-        $ok = @rename($tmp_path, $cfg_path);
-        if (!$ok) {
-            // Windows may need unlink-first when target exists.
-            if (is_file($cfg_path)) {
-                @unlink($cfg_path);
-            }
-            $ok = @rename($tmp_path, $cfg_path);
+    try {
+        if (@file_put_contents($tmp_path, $content) === false) {
+            throw new RuntimeException('tmp write failed');
         }
-    }
-    if (!$ok) {
+        // Prefer atomic replace. Never delete the live config unless a backup
+        // can be restored if the replacement fails.
+        if (!is_file($cfg_path)) {
+            $ok = @rename($tmp_path, $cfg_path);
+        } else {
+            $ok = @rename($tmp_path, $cfg_path);
+            if (!$ok) {
+                // Windows cannot rename over an existing file: backup then replace.
+                $bak_path = $cfg_path . '.bak.' . bin2hex(random_bytes(4));
+                if (!@rename($cfg_path, $bak_path)) {
+                    throw new RuntimeException('backup rename failed');
+                }
+                if (!@rename($tmp_path, $cfg_path)) {
+                    @rename($bak_path, $cfg_path);
+                    throw new RuntimeException('replace after backup failed');
+                }
+                @unlink($bak_path);
+                $ok = true;
+            }
+        }
+        if (!$ok) {
+            throw new RuntimeException('rename failed');
+        }
+    } catch (Throwable $e) {
+        $ok = false;
         @unlink($tmp_path);
     }
-    if ($lock) {
-        flock($lock, LOCK_UN);
-        fclose($lock);
-    }
+
+    flock($lock, LOCK_UN);
+    fclose($lock);
 
     if (!$ok) {
-        error_log('Jirafeau: failed to persist configuration to ' . $cfg_path . ' (path not writable or rename failed)');
+        error_log('Jirafeau: failed to persist configuration to ' . $cfg_path . ' (kept previous file when present)');
         if ($fatal_on_error) {
             jirafeau_fatal_error(t('Can not write local configuration file'));
         }
