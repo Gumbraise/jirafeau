@@ -53,7 +53,8 @@ if (!file_exists(JIRAFEAU_CFG)) {
 }
 
 // is the local configuration writable?
-if (!is_writable(JIRAFEAU_CFG) && !@chmod(JIRAFEAU_CFG, '0666')) {
+if (!is_writable(JIRAFEAU_CFG)) {
+    // Do not chmod world-writable automatically; ask the operator to fix ownership/mode.
     jirafeau_fatal_error(t('CONF_SOLUTION_2'));
 }
 

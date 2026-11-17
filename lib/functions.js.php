@@ -42,7 +42,7 @@ function template_js_preview_link()
             && !type.includes('image/svg+xml'))
         {
             document.getElementById('preview_link').href = preview_link_href;
-            document.getElementById('preview_link_text').innerHTML = web_root + preview_link_href;
+            document.getElementById('preview_link_text').textContent = web_root + preview_link_href;
             document.getElementById('upload_finished_preview').style.display = '';
         }
     } 
@@ -62,7 +62,7 @@ function template_js_download_page()
     if (!!document.getElementById('upload_finished_download_page'))
     {
         document.getElementById('upload_link').href = download_link_href;
-        document.getElementById('upload_link_text').innerHTML = web_root + download_link_href;
+        document.getElementById('upload_link_text').textContent = web_root + download_link_href;
     }
     <?php
 }
@@ -88,7 +88,7 @@ function template_js_delete_link()
     delete_link_href += use_shortlinks ? '?d=' : '&d=';
     delete_link_href += delete_code;
     document.getElementById('delete_link').href = delete_link_href;
-    document.getElementById('delete_link_text').innerHTML = web_root + delete_link_href;
+    document.getElementById('delete_link_text').textContent = web_root + delete_link_href;
     <?php
 }
 function template_js_direct_download()
@@ -104,7 +104,7 @@ function template_js_direct_download()
         direct_download_link_href += '&k=' + crypt_key;
     }
     document.getElementById('direct_link').href = direct_download_link_href;
-    document.getElementById('direct_link_text').innerHTML = web_root + direct_download_link_href;
+    document.getElementById('direct_link_text').textContent = web_root + direct_download_link_href;
     <?php
 }
 function template_js_date_function()
@@ -292,9 +292,9 @@ function show_link (reference, delete_code, crypt_key, date)
 
 function show_upload_progression (percentage, speed, time_left)
 {
-    document.getElementById('uploaded_percentage').innerHTML = percentage;
-    document.getElementById('uploaded_speed').innerHTML = speed;
-    document.getElementById('uploaded_time').innerHTML = time_left;
+    document.getElementById('uploaded_percentage').textContent = percentage;
+    document.getElementById('uploaded_speed').textContent = speed;
+    document.getElementById('uploaded_time').textContent = time_left;
     document.title = percentage + " - <?php echo empty($cfg['title']) ? 'Jirafeau' : $cfg['title']; ?>";
 }
 
@@ -397,7 +397,7 @@ function pop_failure (e)
     if (typeof e !== 'undefined')
         text += ": " + e;
     text += "</p>";
-    document.getElementById('error_pop').innerHTML = e;
+    document.getElementById('error_pop').textContent = e;
 
     document.getElementById('uploading').style.display = 'none';
     document.getElementById('error_pop').style.display = '';
