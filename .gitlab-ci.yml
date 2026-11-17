@@ -15,6 +15,7 @@ cache:
 # Aliases and Anchors for reuse
 
 .linter_script: &linter_script
+    - php tests/security/check_php_version.php
     - ./vendor/bin/parallel-lint --gitlab --exclude vendor .
     - ./vendor/bin/php-cs-fixer -vvv check . --using-cache=no --rules=@PSR12,-single_space_around_construct
 .before_script: &before_linter_script
@@ -31,11 +32,6 @@ cache:
     - php composer.phar require --dev friendsofphp/php-cs-fixer:3.93.1
     # Install all project dependencies
     - php composer.phar install
-
-.enableWarningOnFailure: &linter_warning
-  allow_failure:
-      exit_codes:
-        - 1
 
 # Security / concurrency regression suite (no Composer deps)
 job_security_tests:
@@ -76,14 +72,15 @@ job_docker_php_version:
       ini_get("session.upload_progress.enabled") ? "On" : "Off",
       PHP_EOL;'
 
-# Run tests for php:8.5
+# Lint only PHP branches that received PHP2Shell fixes
+# (CVE-2026-109618 / CVE-2026-109619): 8.2.35+, 8.3.36+, 8.4.27+, 8.5.12+.
+# Dropped 7.4 / 8.1 (EOL, no engine fix). Version gate refuses unpatched tags.
 job_lint_app_85:
   stage: lint
   image: php:8.5
   before_script: *before_linter_script
   script: *linter_script
 
-# Run tests for php:8.4
 job_lint_app_84:
   stage: lint
   image: php:8.4
@@ -96,39 +93,11 @@ job_lint_app_83:
   before_script: *before_linter_script
   script: *linter_script
 
-# Run tests for php:8.2
 job_lint_app_82:
   stage: lint
   image: php:8.2
   before_script: *before_linter_script
   script: *linter_script
-
-
-# =================
-# Deprecated ones START
-# =================
-
-# Run tests for php:8.1
-job_lint_app_81:
-  stage: lint
-  image: php:8.1
-  before_script: *before_linter_script
-  script: *linter_script
-  <<: *linter_warning
-  
-
-
-# Run tests for php:7.4
-job_lint_app_74:
-  stage: lint
-  image: php:7.4
-  before_script: *before_linter_script
-  script: *linter_script
-  <<: *linter_warning
-
-# =================
-# Deprecated ones END
-# =================
 
 publish:
   image: docker:24.0.5
