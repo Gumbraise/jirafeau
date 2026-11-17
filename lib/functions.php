@@ -153,6 +153,14 @@ function jirafeau_configure_session()
     if (PHP_SAPI === 'cli' || session_status() !== PHP_SESSION_NONE) {
         return;
     }
+    // Must run before session_start(); applies outside Docker as well.
+    @ini_set('session.use_strict_mode', '1');
+    @ini_set('session.use_only_cookies', '1');
+    @ini_set('session.use_trans_sid', '0');
+    @ini_set('session.cookie_httponly', '1');
+    if (is_ssl()) {
+        @ini_set('session.cookie_secure', '1');
+    }
     session_set_cookie_params(array(
         'lifetime' => 0,
         'path' => '/',
@@ -223,6 +231,20 @@ function jirafeau_is_valid_style_name($style)
 function jirafeau_is_valid_async_ref($ref)
 {
     return is_string($ref) && preg_match('/^[0-9a-f]{8,64}$/', $ref);
+}
+
+/**
+ * Validate a storage file hash / link name used as a filesystem identifier.
+ * Supported forms: hex hashes (md5 32, sha-like up to 64) and link tokens [0-9a-zA-Z_-]+.
+ */
+function jirafeau_is_valid_storage_id($id)
+{
+    return is_string($id)
+        && $id !== ''
+        && (
+            preg_match('/^[0-9a-f]{32,64}$/', $id) === 1
+            || preg_match('/^[0-9a-zA-Z_-]{8,64}$/', $id) === 1
+        );
 }
 
 /**
@@ -1173,12 +1195,12 @@ function jirafeau_admin_list($name, $file_hash, $link_hash)
                     echo t('ENCRYPTED') . ': ' . (($l['crypted'] || $l['crypted_legacy']) ? t('YES') : t('NO')) . '<br/>';
                     echo t('UPLOAD_DATE') . ': ' . jirafeau_get_datetimefield($l['upload_date']) . '<br/>';
                     if (strlen($l['ip']) > 0) {
-                        echo t('ORIGIN') . ': ' . $l['ip'] . '<br/>';
+                        echo t('ORIGIN') . ': ' . jirafeau_escape($l['ip']) . '<br/>';
                     }
                     echo t('DOWNLOAD_COUNT') . ': ' . $ld['count'] . '<br/>';
                     if ($ld['count'] > 0) {
                         echo t('DOWNLOAD_DATE') . ': ' . jirafeau_get_datetimefield($ld['date']) . '<br/>';
-                        echo t('DOWNLOAD_IP') . ': ' . $ld['ip'] . '<br/>';
+                        echo t('DOWNLOAD_IP') . ': ' . jirafeau_escape($ld['ip']) . '<br/>';
                     }
                     echo '</td><td>';
 
@@ -1443,8 +1465,13 @@ function jirafeau_admin_clean_async()
                 if (!count($a)) {
                     continue;
                 }
-                /* Delete transfers older than 1 hour. */
-                if (time() - $a['last_edited'] > 3600) {
+                /* Delete abandoned transfers (default 1 hour; configurable). */
+                global $cfg;
+                $ttl = 3600;
+                if (is_array($cfg) && !empty($cfg['async_abandoned_ttl'])) {
+                    $ttl = max(60, (int) $cfg['async_abandoned_ttl']);
+                }
+                if (time() - $a['last_edited'] > $ttl) {
                     jirafeau_async_delete(basename($node));
                     $count++;
                 }
@@ -1696,6 +1723,174 @@ function jirafeau_async_delete($ref, $held_lock = null)
 }
 
 /**
+ * Count in-progress async transfers (meta files, not locks/data).
+ */
+function jirafeau_count_async_transfers()
+{
+    $count = 0;
+    if (!defined('VAR_ASYNC') || !is_dir(VAR_ASYNC)) {
+        return 0;
+    }
+    $stack = array(VAR_ASYNC);
+    while (($d = array_shift($stack)) !== null) {
+        $dir = @scandir($d);
+        if (!is_array($dir)) {
+            continue;
+        }
+        foreach ($dir as $node) {
+            if ($node === '.' || $node === '..') {
+                continue;
+            }
+            $path = $d . $node;
+            if (is_dir($path)) {
+                $stack[] = $path . '/';
+            } elseif (is_file($path)
+                       && !preg_match('/(_data|\.lock|\.tmp)$/', $node)
+                       && jirafeau_is_valid_async_ref($node)) {
+                $count++;
+            }
+        }
+    }
+    return $count;
+}
+
+/**
+ * Rate-limit async_init per client (atomic file counter, no sleep).
+ *
+ * @return bool true if allowed
+ */
+function jirafeau_async_rate_allow($cfg, $ip)
+{
+    $limit = isset($cfg['async_init_rate_per_minute']) ? (int) $cfg['async_init_rate_per_minute'] : 0;
+    if ($limit <= 0) {
+        return true;
+    }
+    $base = defined('VAR_FILES') ? dirname(rtrim(VAR_FILES, '/\\')) : sys_get_temp_dir();
+    $dir = $base . DIRECTORY_SEPARATOR . 'upload_rate';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0700, true);
+    }
+    $file = $dir . DIRECTORY_SEPARATOR . hash('sha256', 'async_init|' . (string) $ip);
+    $now = time();
+    $fp = @fopen($file, 'c+');
+    if (!$fp || !flock($fp, LOCK_EX)) {
+        if ($fp) {
+            fclose($fp);
+        }
+        return false;
+    }
+    $raw = stream_get_contents($fp);
+    $data = @json_decode((string) $raw, true);
+    if (!is_array($data) || empty($data['window_start']) || ($now - (int) $data['window_start']) >= 60) {
+        $data = array('window_start' => $now, 'count' => 0);
+    }
+    if ((int) $data['count'] >= $limit) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return false;
+    }
+    $data['count'] = (int) $data['count'] + 1;
+    ftruncate($fp, 0);
+    rewind($fp);
+    fwrite($fp, json_encode($data));
+    fflush($fp);
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return true;
+}
+
+/**
+ * Server-side upload abuse checks before creating a new transfer.
+ * Distinguishes concurrent async sessions, init frequency, and total storage.
+ * Does not silently force upload authentication on public instances.
+ *
+ * @return true|string true or Error string
+ */
+function jirafeau_upload_quota_check($cfg, $ip = null)
+{
+    if (!is_array($cfg)) {
+        return true;
+    }
+    $max_async = isset($cfg['max_concurrent_async']) ? (int) $cfg['max_concurrent_async'] : 0;
+    if ($max_async > 0 && jirafeau_count_async_transfers() >= $max_async) {
+        return 'Error: too many concurrent transfers';
+    }
+    if ($ip !== null && !jirafeau_async_rate_allow($cfg, $ip)) {
+        return 'Error: transfer creation rate exceeded';
+    }
+    $max_storage = isset($cfg['max_storage_bytes']) ? (int) $cfg['max_storage_bytes'] : 0;
+    if ($max_storage > 0 && defined('VAR_FILES') && is_dir(VAR_FILES)) {
+        $used = jirafeau_dir_size(VAR_FILES);
+        if (defined('VAR_ASYNC') && is_dir(VAR_ASYNC)) {
+            $used += jirafeau_dir_size(VAR_ASYNC);
+        }
+        if ($used >= $max_storage) {
+            return 'Error: storage quota exceeded';
+        }
+    }
+    return true;
+}
+
+/**
+ * Verify the real size of an uploaded temporary file (not client-announced size alone).
+ *
+ * @param array $file $_FILES entry
+ * @param int $max_mb maximal_upload_size in MB (0 = unlimited)
+ * @return true|string
+ */
+function jirafeau_verify_uploaded_file_size($file, $max_mb)
+{
+    if (!is_array($file) || empty($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+        return 'Error: invalid upload';
+    }
+    $actual = @filesize($file['tmp_name']);
+    if ($actual === false) {
+        return 'Error: cannot read upload size';
+    }
+    // Prefer the measured size; ignore a lower client-announced size.
+    if ($max_mb > 0 && $actual > $max_mb * 1024 * 1024) {
+        return 'Error: Your file exceeds the maximum authorized file size.';
+    }
+    return true;
+}
+
+/**
+ * Reject browser cross-site upload POSTs when Origin does not match web_root.
+ * Non-browser API clients typically omit Origin and are unaffected.
+ * A custom header is never treated as authentication.
+ *
+ * @return bool true when the request must be rejected
+ */
+function jirafeau_reject_browser_cross_site_upload($cfg)
+{
+    if (empty($_SERVER['HTTP_ORIGIN']) || !is_string($_SERVER['HTTP_ORIGIN'])) {
+        return false;
+    }
+    if (empty($cfg['web_root']) || !is_string($cfg['web_root'])) {
+        return false;
+    }
+    $origin = rtrim($_SERVER['HTTP_ORIGIN'], '/');
+    $root_parts = @parse_url($cfg['web_root']);
+    if (!is_array($root_parts) || empty($root_parts['scheme']) || empty($root_parts['host'])) {
+        return false;
+    }
+    $expected = $root_parts['scheme'] . '://' . $root_parts['host'];
+    if (!empty($root_parts['port'])) {
+        $expected .= ':' . $root_parts['port'];
+    }
+    if (strcasecmp($origin, $expected) === 0) {
+        return false;
+    }
+    // Only enforce for fetch/navigations marked cross-site when the header is present.
+    if (!empty($_SERVER['HTTP_SEC_FETCH_SITE'])
+        && $_SERVER['HTTP_SEC_FETCH_SITE'] !== 'cross-site'
+        && $_SERVER['HTTP_SEC_FETCH_SITE'] !== 'none') {
+        return false;
+    }
+    return true;
+}
+
+/**
   * Init a new asynchronous upload.
   * @param $filename Name of the file to send
   * @param $one_time One time upload parameter
@@ -1706,6 +1901,12 @@ function jirafeau_async_delete($ref, $held_lock = null)
   */
 function jirafeau_async_init($filename, $type, $one_time, $key, $time, $ip)
 {
+    global $cfg;
+    $quota = jirafeau_upload_quota_check($cfg, $ip);
+    if ($quota !== true) {
+        return $quota;
+    }
+
     /* Create temporary folder. */
     $ref = '';
     $p = '';
@@ -1957,7 +2158,11 @@ function jirafeau_encrypt_file($fp_src, $fp_dst)
 
     for ($i = 0; $i < $fs; $i += JIRAFEAU_SODIUM_CHUNKSIZE) {
         $to_enc = fread($r, JIRAFEAU_SODIUM_CHUNKSIZE);
-        $enc = sodium_crypto_secretstream_xchacha20poly1305_push($crypt_state, $to_enc);
+        $is_last = ($i + JIRAFEAU_SODIUM_CHUNKSIZE) >= $fs;
+        $tag = $is_last
+            ? SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL
+            : SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_MESSAGE;
+        $enc = sodium_crypto_secretstream_xchacha20poly1305_push($crypt_state, $to_enc, '', $tag);
 
         if (fwrite($w, $enc) === false) {
             return '';
@@ -1974,44 +2179,154 @@ function jirafeau_encrypt_file($fp_src, $fp_dst)
 }
 
 /**
+ * Whether a Sodium secretstream key has the expected length.
+ * Keys are generated as bin2hex(random_bytes(KEYBYTES/2)) → KEYBYTES ASCII hex chars.
+ */
+function jirafeau_crypt_key_is_valid($k)
+{
+    if (!is_string($k) || !extension_loaded('sodium')) {
+        return false;
+    }
+    return strlen($k) === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES;
+}
+
+/**
+ * Probe that a key can decrypt the first chunk without streaming the whole file.
+ * Used before claiming a one-time link so a bad key does not consume it.
+ *
+ * @return bool
+ */
+function jirafeau_probe_decrypt_key($fp_src, $k)
+{
+    if (!jirafeau_crypt_key_is_valid($k)) {
+        return false;
+    }
+    $fs = @filesize($fp_src);
+    $header_len = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES;
+    $chunk_len = JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES;
+    if ($fs === false || $fs <= $header_len || !is_readable($fp_src)) {
+        return false;
+    }
+    $r = @fopen($fp_src, 'rb');
+    if ($r === false) {
+        return false;
+    }
+    try {
+        $crypt_header = fread($r, $header_len);
+        if ($crypt_header === false || strlen($crypt_header) !== $header_len) {
+            fclose($r);
+            return false;
+        }
+        $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
+        $to_dec = fread($r, $chunk_len);
+        fclose($r);
+        if ($to_dec === false || $to_dec === '') {
+            return false;
+        }
+        $result = sodium_crypto_secretstream_xchacha20poly1305_pull($crypt_state, $to_dec);
+        if ($result === false) {
+            return false;
+        }
+        sodium_memzero($crypt_state);
+        return true;
+    } catch (Throwable $e) {
+        if (is_resource($r)) {
+            fclose($r);
+        }
+        return false;
+    }
+}
+
+/**
  * Decrypt file using Sodium.
  * @param $fp_src file path to the file to decrypt.
  * @param $fp_dst file path to the file to write decrypted file (must not be the same).
  * @param $k decryption key
- * @return true if decryption succeeded, false otherwise
+ * @return true if decryption succeeded (including TAG_FINAL), false otherwise
  */
 function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
 {
+    if (!jirafeau_crypt_key_is_valid($k)) {
+        return false;
+    }
     $fs = filesize($fp_src);
     if ($fs === false || $fs == 0 || extension_loaded('sodium') == false || $fp_src == $fp_dst) {
         return false;
     }
 
-    /* Decrypt file. */
-    $r = fopen($fp_src, 'rb');
-    $w = fopen($fp_dst, 'wb');
+    $header_len = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES;
+    $chunk_len = JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES;
+    if ($fs <= $header_len) {
+        return false;
+    }
 
-    $crypt_header = fread($r, SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES);
-
-    /* Init module. */
-    $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
-
-    /* Decrypt file. */
-
-    for ($i = SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES; $i < $fs; $i += JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES) {
-        $to_dec = fread($r, JIRAFEAU_SODIUM_CHUNKSIZE + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES);
-        [$dec, $crypt_tag] = sodium_crypto_secretstream_xchacha20poly1305_pull($crypt_state, $to_dec);
-
-        if (fwrite($w, $dec) === false) {
-            return false;
+    $r = @fopen($fp_src, 'rb');
+    $w = @fopen($fp_dst, 'wb');
+    if ($r === false || $w === false) {
+        if (is_resource($r)) {
+            fclose($r);
         }
+        if (is_resource($w)) {
+            fclose($w);
+        }
+        return false;
+    }
+
+    $crypt_state = null;
+    $saw_final = false;
+    $consumed = $header_len;
+    try {
+        $crypt_header = fread($r, $header_len);
+        if ($crypt_header === false || strlen($crypt_header) !== $header_len) {
+            throw new RuntimeException('short header');
+        }
+        $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
+
+        for ($i = $header_len; $i < $fs; $i += $chunk_len) {
+            $to_dec = fread($r, $chunk_len);
+            if ($to_dec === false || $to_dec === '') {
+                throw new RuntimeException('truncated ciphertext');
+            }
+            $consumed += strlen($to_dec);
+            $result = sodium_crypto_secretstream_xchacha20poly1305_pull($crypt_state, $to_dec);
+            if ($result === false) {
+                throw new RuntimeException('pull failed');
+            }
+            [$dec, $crypt_tag] = $result;
+            if (fwrite($w, $dec) === false) {
+                throw new RuntimeException('write failed');
+            }
+            if ($crypt_tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL) {
+                $saw_final = true;
+                break;
+            }
+        }
+    } catch (Throwable $e) {
+        fclose($r);
+        fclose($w);
+        if (is_string($fp_dst) && strpos($fp_dst, 'php://') !== 0 && is_file($fp_dst)) {
+            @unlink($fp_dst);
+        }
+        if (is_string($crypt_state)) {
+            @sodium_memzero($crypt_state);
+        }
+        return false;
     }
 
     fclose($r);
     fclose($w);
+    if (is_string($crypt_state)) {
+        sodium_memzero($crypt_state);
+    }
 
-    /* Cleanup. */
-    sodium_memzero($crypt_state);
+    // Prefer TAG_FINAL (new streams). Legacy ciphertext without an explicit final
+    // tag is accepted only when every byte was consumed and every pull succeeded.
+    if (!$saw_final && $consumed < $fs) {
+        if (is_string($fp_dst) && strpos($fp_dst, 'php://') !== 0 && is_file($fp_dst)) {
+            @unlink($fp_dst);
+        }
+        return false;
+    }
 
     return true;
 }
@@ -2078,11 +2393,69 @@ function jirafeau_challenge_upload_password($cfg, $password)
         return false;
     }
     foreach ($cfg['upload_password'] as $p) {
-        if (is_string($p) && hash_equals($p, $password)) {
+        if (!is_string($p) || $p === '') {
+            continue;
+        }
+        // Progressive migration: hashed entries use [PASSWORD]<password_hash>.
+        if (strpos($p, '[PASSWORD]') === 0) {
+            $hash = substr($p, strlen('[PASSWORD]'));
+            if (is_string($hash) && $hash !== '' && password_verify($password, $hash)) {
+                return true;
+            }
+            continue;
+        }
+        if (hash_equals($p, $password)) {
             return true;
         }
     }
     return false;
+}
+
+/**
+ * Validate a literal IP address (IPv4 or IPv6).
+ */
+function jirafeau_is_valid_ip($ip)
+{
+    return is_string($ip) && filter_var($ip, FILTER_VALIDATE_IP) !== false;
+}
+
+/**
+ * Whether $challengedIp is inside an IPv4/IPv6 CIDR or equals a literal IP.
+ */
+function jirafeau_ip_in_cidr($challengedIp, $cidr)
+{
+    if (!is_string($cidr) || $cidr === '') {
+        return false;
+    }
+    if (strpos($cidr, '/') === false) {
+        return jirafeau_is_valid_ip($challengedIp)
+            && jirafeau_is_valid_ip($cidr)
+            && $challengedIp === $cidr;
+    }
+    list($subnet, $mask) = explode('/', $cidr, 2);
+    if (!jirafeau_is_valid_ip($challengedIp) || !jirafeau_is_valid_ip($subnet) || !ctype_digit((string) $mask)) {
+        return false;
+    }
+    $mask = (int) $mask;
+    $ip_bin = @inet_pton($challengedIp);
+    $subnet_bin = @inet_pton($subnet);
+    if ($ip_bin === false || $subnet_bin === false || strlen($ip_bin) !== strlen($subnet_bin)) {
+        return false;
+    }
+    $bits = strlen($ip_bin) * 8;
+    if ($mask < 0 || $mask > $bits) {
+        return false;
+    }
+    $bytes = intdiv($mask, 8);
+    $rem = $mask % 8;
+    if ($bytes > 0 && substr($ip_bin, 0, $bytes) !== substr($subnet_bin, 0, $bytes)) {
+        return false;
+    }
+    if ($rem === 0) {
+        return true;
+    }
+    $mask_byte = chr((0xFF << (8 - $rem)) & 0xFF);
+    return ($ip_bin[$bytes] & $mask_byte) === ($subnet_bin[$bytes] & $mask_byte);
 }
 
 /**
@@ -2094,16 +2467,15 @@ function jirafeau_challenge_upload_password($cfg, $password)
  */
 function jirafeau_challenge_ip($allowedIpList, $challengedIp)
 {
+    if (!jirafeau_is_valid_ip($challengedIp)) {
+        return false;
+    }
     foreach ($allowedIpList as $i) {
-        if ($i == $challengedIp) {
-            return true;
+        if (!is_string($i) || $i === '') {
+            continue;
         }
-        // CIDR test for IPv4 only.
-        if (strpos($i, '/') !== false) {
-            list($subnet, $mask) = explode('/', $i);
-            if ((ip2long($challengedIp) & ~((1 << (32 - $mask)) - 1)) == ip2long($subnet)) {
-                return true;
-            }
+        if (jirafeau_ip_in_cidr($challengedIp, $i)) {
+            return true;
         }
     }
     return false;
@@ -2205,19 +2577,27 @@ function get_ip_list_http_forwarded()
             return array();
         }
         foreach ($l as $ip) {
-            array_push($ip_list, preg_replace('/\s+/', '', $ip));
+            $candidate = preg_replace('/\s+/', '', $ip);
+            // Strip surrounding brackets for IPv6 literals; reject junk.
+            $candidate = trim($candidate, '[]');
+            if (jirafeau_is_valid_ip($candidate)) {
+                array_push($ip_list, $candidate);
+            }
         }
     }
     if (!empty($_SERVER['http_X_forwarded_for'])) {
         $l = explode(',', $_SERVER['http_X_forwarded_for']);
         foreach ($l as $ip) {
-            // Separate IP from port
-            $ipa = explode(':', $ip);
-            if ($ipa === false) {
-                continue;
+            $candidate = preg_replace('/\s+/', '', $ip);
+            $candidate = trim($candidate, '[]');
+            // Legacy header may append :port on IPv4 only.
+            if (strpos($candidate, '.') !== false && substr_count($candidate, ':') === 1) {
+                $ipa = explode(':', $candidate);
+                $candidate = $ipa[0];
             }
-            $ip = $ipa[0];
-            array_push($ip_list, preg_replace('/\s+/', '', $ip));
+            if (jirafeau_is_valid_ip($candidate)) {
+                array_push($ip_list, $candidate);
+            }
         }
     }
     return $ip_list;
@@ -2230,8 +2610,11 @@ function get_ip_list_http_forwarded()
  */
 function get_ip_address($cfg)
 {
-    $remote = $_SERVER['REMOTE_ADDR'];
-    if (count($cfg['proxy_ip']) == 0 || !has_http_forwarded()) {
+    $remote = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+    if (!jirafeau_is_valid_ip($remote)) {
+        return '0.0.0.0';
+    }
+    if (!isset($cfg['proxy_ip']) || !is_array($cfg['proxy_ip']) || count($cfg['proxy_ip']) == 0 || !has_http_forwarded()) {
         return $remote;
     }
 
@@ -2241,11 +2624,15 @@ function get_ip_address($cfg)
     }
 
     foreach ($cfg['proxy_ip'] as $proxy_ip) {
-        if ($remote != $proxy_ip) {
+        if (!jirafeau_ip_in_cidr($remote, (string) $proxy_ip) && $remote !== $proxy_ip) {
             continue;
         }
         // Take the last IP (the one which has been set by the defined proxy).
-        return end($ip_list);
+        $candidate = end($ip_list);
+        if (jirafeau_is_valid_ip($candidate)) {
+            return $candidate;
+        }
+        return $remote;
     }
     return $remote;
 }
@@ -2369,6 +2756,9 @@ function jirafeau_admin_require_csrf_or_exit()
 
 function jirafeau_user_session_start()
 {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(true);
+    }
     $_SESSION['user_auth'] = true;
 }
 
@@ -2429,6 +2819,70 @@ function jirafeau_try_claim_onetime_link($link_name)
     // rename() preserves mtime on many systems; stamp the reservation now.
     @touch($claimed);
     return $claimed;
+}
+
+/**
+ * Release a one-time claim after a failed decrypt / early abort so the link remains usable.
+ * Does not decrement refcount. Only restores if the original link path is still free.
+ *
+ * @return bool true when the claim was restored
+ */
+function jirafeau_release_onetime_claim($claimed_path, $link_name)
+{
+    if (!is_string($claimed_path) || $claimed_path === '' || !is_file($claimed_path)) {
+        return false;
+    }
+    if (!is_string($link_name) || !preg_match('/^[0-9a-zA-Z_-]+$/', $link_name)) {
+        return false;
+    }
+    $path = VAR_LINKS . s2p($link_name) . $link_name;
+    if (is_file($path)) {
+        return false;
+    }
+    return @rename($claimed_path, $path);
+}
+
+/**
+ * Unified throttle scope for download-password checks (web UI and API).
+ */
+function jirafeau_download_password_auth_scope($link_name)
+{
+    return 'download_password:' . (string) $link_name;
+}
+
+/**
+ * Resolve REMOTE_USER set by the web server after successful HTTP authentication.
+ * Never trust PHP_AUTH_USER / Authorization — those can be client-supplied.
+ *
+ * @return string|null
+ */
+function jirafeau_admin_server_remote_user()
+{
+    if (!empty($_SERVER['REMOTE_USER']) && is_string($_SERVER['REMOTE_USER'])) {
+        return $_SERVER['REMOTE_USER'];
+    }
+    if (!empty($_SERVER['REDIRECT_REMOTE_USER']) && is_string($_SERVER['REDIRECT_REMOTE_USER'])) {
+        return $_SERVER['REDIRECT_REMOTE_USER'];
+    }
+    return null;
+}
+
+/**
+ * Whether the server-provided REMOTE_USER matches a configured admin HTTP auth user.
+ */
+function jirafeau_admin_http_auth_matches($cfg)
+{
+    if (empty($cfg['admin_http_auth_user'])) {
+        return false;
+    }
+    $remote = jirafeau_admin_server_remote_user();
+    if ($remote === null || $remote === '') {
+        return false;
+    }
+    $http_users = is_array($cfg['admin_http_auth_user'])
+        ? $cfg['admin_http_auth_user']
+        : array($cfg['admin_http_auth_user']);
+    return in_array($remote, $http_users, true);
 }
 
 /**
@@ -2561,26 +3015,38 @@ function jirafeau_auth_is_blocked($scope, $cfg = null, $max_attempts = 5, $locko
 }
 
 /**
- * Record a failed authentication attempt. Does not sleep; may set a lockout window.
+ * Atomically reserve one authentication attempt under exclusive lock before
+ * password verification. Parallel requests cannot all pass an initial check
+ * without consuming attempts. Does not sleep.
  *
- * @return array{attempts:int,blocked:bool,blocked_until:int}
+ * On success the caller must jirafeau_auth_clear_failures().
+ * On failure the reserved attempt already counts — do not register again.
+ *
+ * @return array{allowed:bool,blocked:bool,attempts:int,blocked_until:int}
  */
-function jirafeau_auth_register_failure($scope, $cfg = null, $max_attempts = 5, $lockout_seconds = 300, $window_seconds = 900)
+function jirafeau_auth_begin_attempt($scope, $cfg = null, $max_attempts = 5, $lockout_seconds = 300, $window_seconds = 900)
 {
     $file = jirafeau_auth_throttle_file($scope, jirafeau_auth_client_key($cfg));
     $now = time();
-    $result = array('attempts' => 1, 'blocked' => false, 'blocked_until' => 0);
+    $denied = array('allowed' => false, 'blocked' => true, 'attempts' => 0, 'blocked_until' => $now + $lockout_seconds);
     $fp = @fopen($file, 'c+');
     if (!$fp || !flock($fp, LOCK_EX)) {
         if ($fp) {
             fclose($fp);
         }
-        return $result;
+        // Fail closed when the throttle store is unavailable.
+        return $denied;
     }
     $raw = stream_get_contents($fp);
     $data = @json_decode((string) $raw, true);
     if (!is_array($data)) {
         $data = array('failures' => array(), 'blocked_until' => 0);
+    }
+    $blocked_until = !empty($data['blocked_until']) ? (int) $data['blocked_until'] : 0;
+    if ($now < $blocked_until) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return array('allowed' => false, 'blocked' => true, 'attempts' => 0, 'blocked_until' => $blocked_until);
     }
     $failures = array();
     if (!empty($data['failures']) && is_array($data['failures'])) {
@@ -2591,7 +3057,6 @@ function jirafeau_auth_register_failure($scope, $cfg = null, $max_attempts = 5, 
         }
     }
     $failures[] = $now;
-    $blocked_until = !empty($data['blocked_until']) ? (int) $data['blocked_until'] : 0;
     if (count($failures) >= $max_attempts) {
         $blocked_until = max($blocked_until, $now + $lockout_seconds);
         $failures = array();
@@ -2607,9 +3072,26 @@ function jirafeau_auth_register_failure($scope, $cfg = null, $max_attempts = 5, 
     flock($fp, LOCK_UN);
     fclose($fp);
     return array(
+        'allowed' => true,
+        'blocked' => false,
         'attempts' => count($failures),
-        'blocked' => $now < $blocked_until,
         'blocked_until' => $blocked_until,
+    );
+}
+
+/**
+ * Record a failed authentication attempt. Does not sleep; may set a lockout window.
+ * Prefer jirafeau_auth_begin_attempt() when verifying passwords under concurrency.
+ *
+ * @return array{attempts:int,blocked:bool,blocked_until:int}
+ */
+function jirafeau_auth_register_failure($scope, $cfg = null, $max_attempts = 5, $lockout_seconds = 300, $window_seconds = 900)
+{
+    $r = jirafeau_auth_begin_attempt($scope, $cfg, $max_attempts, $lockout_seconds, $window_seconds);
+    return array(
+        'attempts' => $r['attempts'],
+        'blocked' => !empty($r['blocked']) || empty($r['allowed']),
+        'blocked_until' => $r['blocked_until'],
     );
 }
 
@@ -2624,7 +3106,45 @@ function jirafeau_auth_clear_failures($scope, $cfg = null)
     }
 }
 
-function jirafeau_export_cfg($cfg)
+/**
+ * Remove expired auth throttle state files (best-effort maintenance).
+ */
+function jirafeau_auth_throttle_cleanup($max_age_seconds = 86400)
+{
+    $base = defined('VAR_FILES') ? dirname(rtrim(VAR_FILES, '/\\')) : sys_get_temp_dir();
+    $dir = $base . DIRECTORY_SEPARATOR . 'auth_throttle';
+    if (!is_dir($dir)) {
+        return 0;
+    }
+    $removed = 0;
+    $now = time();
+    foreach (glob($dir . DIRECTORY_SEPARATOR . '*') ?: array() as $path) {
+        if (!is_file($path)) {
+            continue;
+        }
+        $mtime = @filemtime($path);
+        $raw = @file_get_contents($path);
+        $data = @json_decode((string) $raw, true);
+        $blocked_until = is_array($data) && !empty($data['blocked_until']) ? (int) $data['blocked_until'] : 0;
+        $stale = ($mtime !== false && ($now - $mtime) > $max_age_seconds && $now >= $blocked_until);
+        if ($stale || ($blocked_until > 0 && $now >= $blocked_until && empty($data['failures']))) {
+            if (@unlink($path)) {
+                $removed++;
+            }
+        }
+    }
+    return $removed;
+}
+
+/**
+ * Export configuration atomically. Returns true on success.
+ * When $fatal_on_error is false, write failures are logged without secrets and login may continue.
+ *
+ * @param array $cfg
+ * @param bool $fatal_on_error
+ * @return bool
+ */
+function jirafeau_export_cfg($cfg, $fatal_on_error = true)
 {
     $content = '<?php' . NL;
     $content .= '/* This file was generated by the install process. ' .
@@ -2635,11 +3155,44 @@ function jirafeau_export_cfg($cfg)
     $cfg_path = defined('JIRAFEAU_CFG')
         ? JIRAFEAU_CFG
         : (defined('JIRAFEAU_ROOT') ? JIRAFEAU_ROOT . 'lib/config.local.php' : 'lib/config.local.php');
-    $fileWrite = file_put_contents($cfg_path, $content);
 
-    if (false === $fileWrite) {
-        jirafeau_fatal_error(t('Can not write local configuration file'));
+    $dir = dirname($cfg_path);
+    $lock_path = $cfg_path . '.lock';
+    $tmp_path = $cfg_path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
+    $lock = @fopen($lock_path, 'c');
+    if ($lock && !flock($lock, LOCK_EX)) {
+        fclose($lock);
+        $lock = false;
     }
+
+    $ok = false;
+    if (@file_put_contents($tmp_path, $content) !== false) {
+        // rename is atomic on the same filesystem.
+        $ok = @rename($tmp_path, $cfg_path);
+        if (!$ok) {
+            // Windows may need unlink-first when target exists.
+            if (is_file($cfg_path)) {
+                @unlink($cfg_path);
+            }
+            $ok = @rename($tmp_path, $cfg_path);
+        }
+    }
+    if (!$ok) {
+        @unlink($tmp_path);
+    }
+    if ($lock) {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+
+    if (!$ok) {
+        error_log('Jirafeau: failed to persist configuration to ' . $cfg_path . ' (path not writable or rename failed)');
+        if ($fatal_on_error) {
+            jirafeau_fatal_error(t('Can not write local configuration file'));
+        }
+        return false;
+    }
+    return true;
 }
 
 function jirafeau_mkdir($path)
@@ -2648,15 +3201,14 @@ function jirafeau_mkdir($path)
 }
 
 /**
- * Returns true whether the path is writable or we manage to make it
- * so, which essentially is the same thing.
+ * Returns true whether the path is writable.
+ * Does not chmod to 0777 — operators must set permissions intentionally.
  * @param $path is the file or directory to be tested.
  * @return true if $path is writable.
  */
 function jirafeau_is_writable($path)
 {
-    /* "@" gets rid of error messages. */
-    return is_writable($path) || @chmod($path, 0777);
+    return is_writable($path);
 }
 
 function jirafeau_check_var_dir($path)

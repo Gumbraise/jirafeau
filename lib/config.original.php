@@ -80,24 +80,28 @@ $cfg['link_name_length'] = 8;
 
 /* Upload password(s).
  * An empty array will disable password authentication.
- * $cfg['upload_password'] = array();               // No password
+ * Entries may be plaintext (legacy) or hashed as '[PASSWORD]' . password_hash(...).
+ * Progressive migration: keep plaintext entries until rotated; hashed entries work alongside.
+ * $cfg['upload_password'] = array();               // No password (public upload)
  * $cfg['upload_password'] = array('psw1');         // One password
- * $cfg['upload_password'] = array('psw1', 'psw2'); // Two passwords
+ * $cfg['upload_password'] = array('[PASSWORD]$2y$...'); // Hashed
+ * Do not force a password here for intentionally public instances — set it explicitly
+ * in production when abuse protection is required.
  */
 $cfg['upload_password'] = array();
 
 /* List of IP allowed to upload a file.
  * If the list is empty, then there is no upload restriction based on IP.
  * Elements of the list can be a single IP (e.g. "123.45.67.89") or
- * an IP range (e.g. "123.45.0.0/16").
- * Note that CIDR notation is available for IPv4 only for the moment.
+ * an IP range (e.g. "123.45.0.0/16" or "2001:db8::/32").
+ * CIDR notation supports IPv4 and IPv6.
  */
 $cfg['upload_ip'] = array();
 
 /* List of IP allowed to upload a file without password.
  * Elements of the list can be a single IP (e.g. "123.45.67.89") or
- * an IP range (e.g. "123.45.0.0/16").
- * Note that CIDR notation is available for IPv4 only for the moment.
+ * an IP range (e.g. "123.45.0.0/16" or "2001:db8::/32").
+ * CIDR notation supports IPv4 and IPv6.
  */
 $cfg['upload_ip_nopassword'] = array();
 
@@ -111,21 +115,29 @@ $cfg['upload_ip_nopassword'] = array();
  */
 $cfg['admin_password'] = '';
 
-/* If set, let the users be authenticated as administrator.
- * The users provided here are authenticated by HTTP authentication.
- * Note that Jirafeau does not manage the HTTP login part, it just checks
- * that one of the provided users is logged in.
+/* If set, let the users be authenticated as administrator via HTTP auth
+ * performed by the web server. Jirafeau only accepts REMOTE_USER (or
+ * REDIRECT_REMOTE_USER) set by the server after successful authentication.
+ * PHP_AUTH_USER / Authorization headers from the client are NOT trusted.
+ *
+ * Server contract (Apache example):
+ *   AuthType Basic
+ *   AuthName "Jirafeau admin"
+ *   AuthUserFile /path/to/htpasswd
+ *   Require user alice
+ *   # Ensure CGI/FPM passes REMOTE_USER (e.g. RewriteRule with E=REMOTE_USER:%{REMOTE_USER})
+ *
  * May be an array for multiple users or a string for a single user.
- * The option to provide a string is for backward compatibility.
- * If »admin_password« parameter is set, then the »admin_password« is ignored.
+ * Prefer combining with admin_ip. admin_password may still be used as a fallback
+ * when HTTP auth did not establish a session.
  */
 $cfg['admin_http_auth_user'] = array();
 
 /* List of IP allowed to access the admin interface.
  * If the list is empty, then there is no admin interface restriction based on IP.
  * Elements of the list can be a single IP (e.g. "123.45.67.89") or
- * an IP range (e.g. "123.45.0.0/16").
- * Note that CIDR notation is available for IPv4 only for the moment.
+ * an IP range (e.g. "123.45.0.0/16" or "2001:db8::/32").
+ * CIDR notation supports IPv4 and IPv6.
  */
 $cfg['admin_ip'] = array();
 
@@ -170,17 +182,22 @@ $cfg['one_time_download_preselected'] = false;
 
 /* Set maximal upload size expressed in MB.
  * »0« means unlimited upload size.
+ * Production recommendation: set an explicit limit (server-side checks use the
+ * measured temporary-file size, not only the client-announced Content-Length).
  */
 $cfg['maximal_upload_size'] = 0;
 
-/* Forbid specific file extensions from being uploaded.
- * Leave empty to allow every extension.
- * Extensions are matched case-insensitively; a leading dot is optional.
- * Compound extensions such as 'tar.gz' are supported. Note that 'gz'
- * also covers 'tar.gz', while 'tar.gz' leaves plain '.gz' files allowed.
- * $cfg['disallowed_extensions'] = array('exe', 'bat', 'sh', 'php', 'tar.gz');
- */
-$cfg['disallowed_extensions'] = array();
+/* Maximum number of concurrent unfinished async transfers (0 = unlimited). */
+$cfg['max_concurrent_async'] = 0;
+
+/* Max async_init creations per client IP per minute (0 = unlimited). */
+$cfg['async_init_rate_per_minute'] = 0;
+
+/* Soft cap on files + async temporary storage in bytes (0 = unlimited). */
+$cfg['max_storage_bytes'] = 0;
+
+/* Seconds after last edit before an unfinished async transfer is cleaned. */
+$cfg['async_abandoned_ttl'] = 3600;
 
 /* Proxy IP
  * If the installation is behind some reverse proxies, it is possible to set
