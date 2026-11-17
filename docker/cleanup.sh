@@ -5,6 +5,7 @@ while true
 do
     php /www/admin.php clean_expired
     php /www/admin.php clean_async
-    # wait 24 hours
-    sleep 86400
+    # Abandoned async transfers use async_abandoned_ttl (default 1h).
+    # Sweep more often than daily so temp storage does not accumulate.
+    sleep 3600
 done

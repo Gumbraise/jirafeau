@@ -201,6 +201,10 @@ function run_setup(&$cfg)
     env_2_cfg_bool($cfg, 'debug');
     env_2_cfg_bool($cfg, 'debug_enforce_classic_upload');
     env_2_cfg_int($cfg, 'maximal_upload_size');
+    env_2_cfg_int($cfg, 'max_concurrent_async');
+    env_2_cfg_int($cfg, 'async_init_rate_per_minute');
+    env_2_cfg_int($cfg, 'max_storage_bytes');
+    env_2_cfg_int($cfg, 'async_abandoned_ttl');
     env_2_cfg_string_array($cfg, 'upload_password');
     env_2_cfg_string_array($cfg, 'upload_ip');
     env_2_cfg_string_array($cfg, 'admin_ip');
