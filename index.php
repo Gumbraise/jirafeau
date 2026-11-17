@@ -60,9 +60,16 @@ elseif (true === jirafeau_challenge_upload_ip_without_password($cfg, get_ip_addr
 elseif (true === jirafeau_challenge_upload_ip($cfg, get_ip_address($cfg))) {
     // Is an upload password required?
     if (jirafeau_has_upload_password($cfg)) {
-        // Challenge by password
+        // Challenge by password (atomic throttle before verify; per-client, not global).
         if (isset($_POST['upload_password'])) {
-            if (jirafeau_challenge_upload_password($cfg, $_POST['upload_password'])) {
+            $upload_auth_scope = 'upload_password';
+            $attempt = jirafeau_auth_begin_attempt($upload_auth_scope, $cfg);
+            if (!$attempt['allowed']) {
+                http_response_code(429);
+                jirafeau_session_end();
+                jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $cfg, 'denied', false);
+            } elseif (jirafeau_challenge_upload_password($cfg, $_POST['upload_password'])) {
+                jirafeau_auth_clear_failures($upload_auth_scope, $cfg);
                 jirafeau_user_session_start();
                 $_SESSION['user_auth_type'] = JIRAFEAU_USER_AUTH_BY_PASSWORD;
             } else {

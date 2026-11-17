@@ -70,12 +70,26 @@ session_start();
 /* Upload file */
 if (isset($_FILES['file']) && is_writable(VAR_FILES)
     && is_writable(VAR_LINKS)) {
+    if (jirafeau_reject_browser_cross_site_upload($cfg)) {
+        http_response_code(403);
+        echo 'Error 27: Cross-site upload rejected';
+        exit;
+    }
     if (!jirafeau_user_session_logged()) {
-        if (isset($_POST['upload_password']) &&
-            !jirafeau_challenge_upload($cfg, get_ip_address($cfg), $_POST['upload_password'])) {
-            echo 'Error 3: Invalid password';
-            exit;
-        } elseif (!isset($_POST['upload_password']) && !jirafeau_challenge_upload($cfg, get_ip_address($cfg), null)) {
+        if (isset($_POST['upload_password'])) {
+            $upload_auth_scope = 'upload_password';
+            $attempt = jirafeau_auth_begin_attempt($upload_auth_scope, $cfg);
+            if (!$attempt['allowed']) {
+                http_response_code(429);
+                echo 'Error 3: Invalid password';
+                exit;
+            }
+            if (!jirafeau_challenge_upload($cfg, get_ip_address($cfg), $_POST['upload_password'])) {
+                echo 'Error 3: Invalid password';
+                exit;
+            }
+            jirafeau_auth_clear_failures($upload_auth_scope, $cfg);
+        } elseif (!jirafeau_challenge_upload($cfg, get_ip_address($cfg), null)) {
             echo 'Error 2: No password nor allowed IP';
             exit;
         }
@@ -104,10 +118,14 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         $time = jirafeau_datestr_to_int($_POST['time']);
     }
 
-    // Check file size
-    if ($cfg['maximal_upload_size'] > 0 &&
-        $_FILES['file']['size'] > $cfg['maximal_upload_size'] * 1024 * 1024) {
+    $size_check = jirafeau_verify_uploaded_file_size($_FILES['file'], (int) $cfg['maximal_upload_size']);
+    if ($size_check !== true) {
         echo 'Error 5: Your file exceeds the maximum authorized file size.';
+        exit;
+    }
+    $quota = jirafeau_upload_quota_check($cfg, get_ip_address($cfg));
+    if ($quota !== true) {
+        echo $quota;
         exit;
     }
 
@@ -193,38 +211,53 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         exit;
     }
     if (strlen($link['key']) > 0) {
-        $auth_scope = 'api_download_password:' . $link_name;
-        if (jirafeau_auth_is_blocked($auth_scope, $cfg)) {
+        $auth_scope = jirafeau_download_password_auth_scope($link_name);
+        $attempt = jirafeau_auth_begin_attempt($auth_scope, $cfg);
+        if (!$attempt['allowed']) {
             http_response_code(429);
             echo 'Error 10';
             exit;
         }
         if (!jirafeau_verify_download_password($key, $link['key'])) {
-            jirafeau_auth_register_failure($auth_scope, $cfg);
             echo 'Error 10';
             exit;
         }
         jirafeau_auth_clear_failures($auth_scope, $cfg);
     }
     $p = s2p($link['hash']);
-    if (!file_exists(VAR_FILES . $p . $link['hash'])) {
+    $crypt_src = VAR_FILES . $p . $link['hash'];
+    if (!file_exists($crypt_src)) {
         echo 'Error 11';
         exit;
+    }
+    if (!empty($link['crypted'])) {
+        // API streaming of encrypted payloads requires a valid key; refuse without consuming onetime.
+        $api_key = isset($_POST['crypt_key']) ? $_POST['crypt_key'] : (isset($_GET['k']) ? $_GET['k'] : '');
+        if (!jirafeau_crypt_key_is_valid($api_key) || !jirafeau_probe_decrypt_key($crypt_src, $api_key)) {
+            echo 'Error 15';
+            exit;
+        }
     }
 
     $onetime_claim = false;
     $onetime_finalized = false;
+    $onetime_abort = false;
     if ($link['onetime'] == 'O') {
         $onetime_claim = jirafeau_try_claim_onetime_link($link_name);
         if ($onetime_claim === false) {
             echo 'Error 8';
             exit;
         }
-        register_shutdown_function(function () use (&$onetime_claim, &$onetime_finalized, $link) {
-            if ($onetime_claim !== false && !$onetime_finalized) {
-                jirafeau_finalize_onetime_claim($onetime_claim, $link);
-                $onetime_finalized = true;
+        register_shutdown_function(function () use (&$onetime_claim, &$onetime_finalized, &$onetime_abort, $link, $link_name) {
+            if ($onetime_claim === false || $onetime_finalized) {
+                return;
             }
+            if ($onetime_abort) {
+                jirafeau_release_onetime_claim($onetime_claim, $link_name);
+                return;
+            }
+            jirafeau_finalize_onetime_claim($onetime_claim, $link);
+            $onetime_finalized = true;
         });
     }
 
@@ -234,13 +267,27 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     header('Content-Type: ' . jirafeau_sanitize_mime_type($link['mime_type']));
     jirafeau_content_disposition_header($link['file_name'], true);
 
-    $r = fopen(VAR_FILES . $p . $link['hash'], 'r');
-    while (!feof($r)) {
-        print fread($r, 1024);
+    $stream_ok = true;
+    if (!empty($link['crypted'])) {
+        $api_key = isset($_POST['crypt_key']) ? $_POST['crypt_key'] : (isset($_GET['k']) ? $_GET['k'] : '');
+        $stream_ok = jirafeau_decrypt_file($crypt_src, 'php://output', $api_key);
+        if (!$stream_ok) {
+            $onetime_abort = true;
+            if ($onetime_claim !== false) {
+                jirafeau_release_onetime_claim($onetime_claim, $link_name);
+                $onetime_claim = false;
+            }
+            exit;
+        }
+    } else {
+        $r = fopen($crypt_src, 'r');
+        while (!feof($r)) {
+            print fread($r, 1024);
+        }
+        fclose($r);
     }
-    fclose($r);
 
-    if ($onetime_claim !== false) {
+    if ($onetime_claim !== false && $stream_ok) {
         jirafeau_finalize_onetime_claim($onetime_claim, $link);
         $onetime_finalized = true;
     }
@@ -433,12 +480,25 @@ fi
 }
 /* Initialize an asynchronous upload. */
 elseif (isset($_GET['init_async'])) {
+    if (jirafeau_reject_browser_cross_site_upload($cfg)) {
+        http_response_code(403);
+        echo 'Error 27: Cross-site upload rejected';
+        exit;
+    }
     if (jirafeau_user_session_logged()) {
     } elseif (isset($_POST['upload_password'])) {
+        $upload_auth_scope = 'upload_password';
+        $attempt = jirafeau_auth_begin_attempt($upload_auth_scope, $cfg);
+        if (!$attempt['allowed']) {
+            http_response_code(429);
+            echo 'Error 20: Invalid password';
+            exit;
+        }
         if (!jirafeau_challenge_upload($cfg, get_ip_address($cfg), $_POST['upload_password'])) {
             echo 'Error 20: Invalid password';
             exit;
         }
+        jirafeau_auth_clear_failures($upload_auth_scope, $cfg);
     } else {
         if (!jirafeau_challenge_upload($cfg, get_ip_address($cfg), null)) {
             echo 'Error 19: No password nor allowed IP';
@@ -508,7 +568,10 @@ elseif (isset($_GET['init_async'])) {
 }
 /* Continue an asynchronous upload. */
 elseif (isset($_GET['push_async'])) {
-    if ((!isset($_POST['ref']))
+    if (jirafeau_reject_browser_cross_site_upload($cfg)) {
+        http_response_code(403);
+        echo 'Error 27: Cross-site upload rejected';
+    } elseif ((!isset($_POST['ref']))
         || (!isset($_FILES['data']))
         || (!isset($_POST['code']))) {
         echo 'Error 23';
