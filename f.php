@@ -242,7 +242,9 @@ if (!$password_challenged && !$do_download && !$do_preview) {
 /* Validate crypt key before claiming a one-time link so a bad key does not consume it. */
 $crypt_src = VAR_FILES . $p . $link['hash'];
 if ($link['crypted']) {
-    if (!jirafeau_crypt_key_is_valid($crypt_key) || !jirafeau_probe_decrypt_key($crypt_src, $crypt_key)) {
+    $require_v1 = !empty($link['crypt_v1']);
+    if (!jirafeau_crypt_key_is_valid($crypt_key)
+        || !jirafeau_probe_decrypt_key($crypt_src, $crypt_key, $require_v1)) {
         require(JIRAFEAU_ROOT.'lib/template/header.php');
         jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $cfg, 'denied', false);
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
@@ -307,7 +309,7 @@ if ($cfg['litespeed_workaround']) {
 }
 /* Read encrypted file (Sodium mode). */
 elseif ($link['crypted']) {
-    $stream_ok = jirafeau_decrypt_file($crypt_src, 'php://output', $crypt_key);
+    $stream_ok = jirafeau_decrypt_file($crypt_src, 'php://output', $crypt_key, !empty($link['crypt_v1']));
     if (!$stream_ok) {
         $onetime_abort = true;
         if ($onetime_claim !== false) {

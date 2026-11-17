@@ -683,8 +683,22 @@ function jirafeau_file_refcount_adjust($hash, $delta)
  */
 function jirafeau_file_commit_payload($hash, $src_path, $install_mode = 'rename')
 {
+    global $cfg;
+    $max_storage = (is_array($cfg) && isset($cfg['max_storage_bytes']))
+        ? (int) $cfg['max_storage_bytes'] : 0;
+    // Lock order: quota first, then per-hash file lock (avoid deadlocks with push).
+    $qlock = false;
+    if ($max_storage > 0) {
+        $qlock = jirafeau_quota_lock();
+        if ($qlock === false) {
+            return false;
+        }
+    }
     $fp = jirafeau_file_refcount_lock($hash);
     if ($fp === false) {
+        if ($qlock) {
+            jirafeau_quota_unlock($qlock);
+        }
         return false;
     }
     $p = s2p($hash);
@@ -694,6 +708,15 @@ function jirafeau_file_commit_payload($hash, $src_path, $install_mode = 'rename'
         if (!is_file($payload)) {
             if (!is_string($src_path) || !is_file($src_path)) {
                 return false;
+            }
+            if ($max_storage > 0) {
+                $src_size = @filesize($src_path);
+                if ($src_size === false) {
+                    return false;
+                }
+                if ((jirafeau_storage_used_bytes() + $src_size) > $max_storage) {
+                    return false;
+                }
             }
             $dir = dirname($payload);
             if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
@@ -741,6 +764,9 @@ function jirafeau_file_commit_payload($hash, $src_path, $install_mode = 'rename'
     } finally {
         flock($fp, LOCK_UN);
         fclose($fp);
+        if ($qlock) {
+            jirafeau_quota_unlock($qlock);
+        }
     }
 }
 
@@ -940,7 +966,7 @@ function jirafeau_add_file($file, $one_time_download, $key, $time, $ip, $crypt, 
         $handle,
         $name . NL. $mime_type . NL. $size . NL. $password . NL. $time .
             NL . $hash. NL . ($one_time_download ? 'O' : 'R') . NL . time() .
-            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C2' : 'O')
+            NL . $ip . NL. $delete_link_code . NL . ($crypted ? 'C3' : 'O')
     );
     fclose($handle);
     $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
@@ -1108,8 +1134,13 @@ function jirafeau_get_link_from_path($path)
     $out['upload_date'] = trim($c[7]);
     $out['ip'] = trim($c[8]);
     $out['link_code'] = trim($c[9]);
-    $out['crypted'] = trim($c[10]) == 'C2';
-    $out['crypted_legacy'] = trim($c[10]) == 'C';
+    $crypt_flag = trim($c[10]);
+    // C3 = Sodium v1 (JFCR1 + TAG_FINAL). C2 = older Sodium (no authenticated layout).
+    // C = legacy mcrypt.
+    $out['crypt_flag'] = $crypt_flag;
+    $out['crypted'] = ($crypt_flag === 'C3' || $crypt_flag === 'C2');
+    $out['crypt_v1'] = ($crypt_flag === 'C3');
+    $out['crypted_legacy'] = ($crypt_flag === 'C');
 
     return $out;
 }
@@ -2316,7 +2347,7 @@ function jirafeau_async_end($ref, $code, $crypt, $link_name_length, $file_hash_m
             $handle,
             $a['file_name'] . NL . $a['mime_type'] . NL . $size . NL .
                 $a['key'] . NL . $a['time'] . NL . $hash . NL . $a['onetime'] . NL .
-                time() . NL . $a['ip'] . NL . $delete_link_code . NL . ($crypted ? 'C2' : 'O')
+                time() . NL . $a['ip'] . NL . $delete_link_code . NL . ($crypted ? 'C3' : 'O')
         );
         fclose($handle);
         $hash_link = substr(base_16_to_64(md5_file($link_tmp_name)), 0, $link_name_length);
@@ -2411,12 +2442,6 @@ function jirafeau_crypt_key_is_valid($k)
 }
 
 /**
- * Probe that a key can decrypt the first chunk without streaming the whole file.
- * Used before claiming a one-time link so a bad key does not consume it.
- *
- * @return bool
- */
-/**
  * Read the secretstream header, detecting JFCR1 (v1) vs legacy Sodium layout.
  *
  * @param resource $r open binary handle at start of file
@@ -2453,7 +2478,10 @@ function jirafeau_crypt_read_header($r, $fs)
     return array(false, $prefix . $rest);
 }
 
-function jirafeau_probe_decrypt_key($fp_src, $k)
+/**
+ * @param bool $require_v1 when true (link flag C3), ciphertext must use JFCR1 layout
+ */
+function jirafeau_probe_decrypt_key($fp_src, $k, $require_v1 = false)
 {
     if (!jirafeau_crypt_key_is_valid($k)) {
         return false;
@@ -2473,7 +2501,11 @@ function jirafeau_probe_decrypt_key($fp_src, $k)
             fclose($r);
             return false;
         }
-        [, $crypt_header] = $hdr;
+        [$is_v1, $crypt_header] = $hdr;
+        if ($require_v1 && !$is_v1) {
+            fclose($r);
+            return false;
+        }
         $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
         $to_dec = fread($r, $chunk_len);
         fclose($r);
@@ -2496,15 +2528,16 @@ function jirafeau_probe_decrypt_key($fp_src, $k)
 
 /**
  * Decrypt file using Sodium.
- * v1 (magic JFCR1): requires authenticated TAG_FINAL and rejects trailing bytes.
- * Legacy (no magic): accepts streams without TAG_FINAL only when every byte is consumed.
+ * When $require_v1 is true (link metadata C3): JFCR1 + TAG_FINAL required; no legacy fallback.
+ * When false (C2): legacy layout without magic may be accepted if fully consumed.
  *
  * @param $fp_src file path to the file to decrypt.
  * @param $fp_dst file path to the file to write decrypted file (must not be the same).
  * @param $k decryption key
+ * @param bool $require_v1
  * @return true if decryption succeeded, false otherwise
  */
-function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
+function jirafeau_decrypt_file($fp_src, $fp_dst, $k, $require_v1 = false)
 {
     if (!jirafeau_crypt_key_is_valid($k)) {
         return false;
@@ -2537,6 +2570,9 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
             throw new RuntimeException('bad header');
         }
         [$is_v1, $crypt_header] = $hdr;
+        if ($require_v1 && !$is_v1) {
+            throw new RuntimeException('expected crypt v1 layout');
+        }
         $crypt_state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($crypt_header, $k);
 
         while (!feof($r)) {
@@ -2565,7 +2601,7 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
             }
         }
 
-        if ($is_v1) {
+        if ($is_v1 || $require_v1) {
             if (!$saw_final) {
                 throw new RuntimeException('missing authenticated final tag');
             }
@@ -2574,7 +2610,7 @@ function jirafeau_decrypt_file($fp_src, $fp_dst, $k)
                 throw new RuntimeException('trailing ciphertext after final');
             }
         } else {
-            // Legacy: no magic; require full consumption without trailing unread bytes.
+            // Legacy C2: no magic; require full consumption without trailing unread bytes.
             if ($saw_final) {
                 $extra = fread($r, 1);
                 if ($extra !== false && $extra !== '') {
@@ -3454,23 +3490,47 @@ function jirafeau_export_cfg($cfg, $fatal_on_error = true)
         if (@file_put_contents($tmp_path, $content) === false) {
             throw new RuntimeException('tmp write failed');
         }
-        // Prefer atomic replace. Never delete the live config unless a backup
-        // can be restored if the replacement fails.
+        // Prefer atomic rename-over. Never move the live file aside first:
+        // a crash between backup and replace would leave no active config.
         if (!is_file($cfg_path)) {
             $ok = @rename($tmp_path, $cfg_path);
         } else {
             $ok = @rename($tmp_path, $cfg_path);
             if (!$ok) {
-                // Windows cannot rename over an existing file: backup then replace.
-                $bak_path = $cfg_path . '.bak.' . bin2hex(random_bytes(4));
-                if (!@rename($cfg_path, $bak_path)) {
-                    throw new RuntimeException('backup rename failed');
+                // Windows cannot rename over an existing path: overwrite in place
+                // so the path remains present for the whole operation.
+                $data = @file_get_contents($tmp_path);
+                if ($data === false) {
+                    throw new RuntimeException('tmp read failed');
                 }
-                if (!@rename($tmp_path, $cfg_path)) {
-                    @rename($bak_path, $cfg_path);
-                    throw new RuntimeException('replace after backup failed');
+                $existing = @fopen($cfg_path, 'c+');
+                if ($existing === false) {
+                    throw new RuntimeException('cannot open live config');
                 }
-                @unlink($bak_path);
+                if (!flock($existing, LOCK_EX | LOCK_NB)) {
+                    fclose($existing);
+                    throw new RuntimeException('cannot lock live config');
+                }
+                $wrote = false;
+                try {
+                    if (ftruncate($existing, 0) === false) {
+                        throw new RuntimeException('truncate failed');
+                    }
+                    rewind($existing);
+                    $n = fwrite($existing, $data);
+                    if ($n === false || $n !== strlen($data)) {
+                        throw new RuntimeException('in-place write failed');
+                    }
+                    fflush($existing);
+                    $wrote = true;
+                } finally {
+                    flock($existing, LOCK_UN);
+                    fclose($existing);
+                }
+                if (!$wrote) {
+                    throw new RuntimeException('in-place replace failed');
+                }
+                @unlink($tmp_path);
                 $ok = true;
             }
         }

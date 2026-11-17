@@ -123,7 +123,12 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
         echo 'Error 5: Your file exceeds the maximum authorized file size.';
         exit;
     }
-    $quota = jirafeau_upload_quota_check($cfg, get_ip_address($cfg));
+    $actual_size = @filesize($_FILES['file']['tmp_name']);
+    $quota = jirafeau_upload_quota_check(
+        $cfg,
+        get_ip_address($cfg),
+        ($actual_size !== false) ? $actual_size : 0
+    );
     if ($quota !== true) {
         echo $quota;
         exit;
@@ -233,7 +238,9 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     if (!empty($link['crypted'])) {
         // API streaming of encrypted payloads requires a valid key; refuse without consuming onetime.
         $api_key = isset($_POST['crypt_key']) ? $_POST['crypt_key'] : (isset($_GET['k']) ? $_GET['k'] : '');
-        if (!jirafeau_crypt_key_is_valid($api_key) || !jirafeau_probe_decrypt_key($crypt_src, $api_key)) {
+        $require_v1 = !empty($link['crypt_v1']);
+        if (!jirafeau_crypt_key_is_valid($api_key)
+            || !jirafeau_probe_decrypt_key($crypt_src, $api_key, $require_v1)) {
             echo 'Error 15';
             exit;
         }
@@ -270,7 +277,7 @@ if (isset($_FILES['file']) && is_writable(VAR_FILES)
     $stream_ok = true;
     if (!empty($link['crypted'])) {
         $api_key = isset($_POST['crypt_key']) ? $_POST['crypt_key'] : (isset($_GET['k']) ? $_GET['k'] : '');
-        $stream_ok = jirafeau_decrypt_file($crypt_src, 'php://output', $api_key);
+        $stream_ok = jirafeau_decrypt_file($crypt_src, 'php://output', $api_key, !empty($link['crypt_v1']));
         if (!$stream_ok) {
             $onetime_abort = true;
             if ($onetime_claim !== false) {
