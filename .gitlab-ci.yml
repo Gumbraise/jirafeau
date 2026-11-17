@@ -3,6 +3,10 @@ stages:
   - lint
   - deploy
 
+default:
+  tags:
+    - k8s-cev-components
+
 # Select what we should cache
 cache:
   paths:
@@ -37,8 +41,6 @@ cache:
 job_security_tests:
   stage: test
   image: php:8.3-cli
-  tags:
-    - k8s-cev-components
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
