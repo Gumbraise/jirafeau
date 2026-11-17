@@ -301,22 +301,33 @@ if (extension_loaded('sodium')) {
     expect_true(jirafeau_probe_decrypt_key($enc, $key), 'probe accepts good key');
     expect_true(!jirafeau_probe_decrypt_key($enc, str_repeat('0', 32)), 'probe rejects wrong key');
     expect_true(!jirafeau_crypt_key_is_valid('short'), 'malformed key rejected');
-    expect_true(jirafeau_decrypt_file($enc, $dec, $key), 'decrypt good key');
+    expect_true(jirafeau_decrypt_file($enc, $dec, $key, true), 'decrypt good key with require_v1');
     expect_eq(file_get_contents($dec), $plain, 'decrypt restores plaintext');
-    expect_true(!jirafeau_decrypt_file($enc, $dec . '.bad', str_repeat('1', 32)), 'decrypt wrong key fails');
+    expect_true(!jirafeau_decrypt_file($enc, $dec . '.bad', str_repeat('1', 32), true), 'decrypt wrong key fails');
+    expect_true(jirafeau_probe_decrypt_key($enc, $key, true), 'probe accepts v1 with require_v1');
 
     // Truncation after complete frames but before TAG_FINAL must fail for v1.
     $full_enc = file_get_contents($enc);
     expect_true(strlen($full_enc) > 2048, 'ciphertext larger than 2048 for truncation case');
     $trunc = $cfg['var_root'] . 'trunc.bin';
     file_put_contents($trunc, substr($full_enc, 0, 2048));
-    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t', $key), 'truncated v1 ciphertext (2048/full) fails');
+    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t', $key, true), 'truncated v1 ciphertext (2048/full) fails');
     file_put_contents($trunc, substr($full_enc, 0, 40));
-    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t2', $key), 'short truncated ciphertext fails');
+    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t2', $key, true), 'short truncated ciphertext fails');
 
     $trail = $cfg['var_root'] . 'trail.bin';
     file_put_contents($trail, $full_enc . 'EXTRA');
-    expect_true(!jirafeau_decrypt_file($trail, $dec . '.tr', $key), 'trailing bytes after v1 final are rejected');
+    expect_true(!jirafeau_decrypt_file($trail, $dec . '.tr', $key, true), 'trailing bytes after v1 final are rejected');
+
+    // Downgrade attack: strip JFCR1 + final frame must not succeed when C3/require_v1.
+    $magic_len = strlen(JIRAFEAU_CRYPT_MAGIC_V1);
+    $stripped = substr($full_enc, $magic_len, 2048);
+    $down = $cfg['var_root'] . 'downgrade.bin';
+    file_put_contents($down, $stripped);
+    expect_true(!jirafeau_decrypt_file($down, $dec . '.dg', $key, true), 'C3 require_v1 rejects magic-stripped truncated blob');
+    expect_true(!jirafeau_probe_decrypt_key($down, $key, true), 'C3 probe rejects magic-stripped blob');
+    // Without require_v1 (C2), stripped truncated content must not be treated as success either when incomplete:
+    // (may still accept complete legacy — only assert require_v1 path here.)
 
     $tampered = $cfg['var_root'] . 'tamp.bin';
     $blob = $full_enc;
@@ -375,14 +386,33 @@ expect_true(is_string($q) && strpos($q, 'Error:') === 0, 'blocks when concurrent
 @unlink(VAR_ASYNC . s2p($aref) . $aref);
 $cfg['max_concurrent_async'] = 0;
 
-// Storage ceiling accounts for additional bytes (as async_push does under lock).
+// Storage ceiling accounts for additional bytes (as async_push / classic commit do under lock).
 @file_put_contents(VAR_FILES . 'quota-pad.bin', str_repeat('x', 80));
 $cfg['max_storage_bytes'] = 100;
-$qpad = jirafeau_upload_quota_check_unlocked($cfg, null, 30);
+$qpad = jirafeau_upload_quota_check($cfg, null, 30);
 expect_true(is_string($qpad) && strpos($qpad, 'storage quota') !== false, 'additional write beyond storage ceiling rejected');
-expect_true(jirafeau_upload_quota_check_unlocked($cfg, null, 5) === true, 'additional write within ceiling allowed');
+expect_true(jirafeau_upload_quota_check($cfg, null, 5) === true, 'additional write within ceiling allowed');
+// Classic commit path refuses oversized install under the same ceiling.
+$big = $cfg['var_root'] . 'classic-big.bin';
+file_put_contents($big, str_repeat('y', 50));
+$hash_big = str_repeat('e', 32);
+$cfg['max_storage_bytes'] = 100;
+$commit_blocked = jirafeau_file_commit_payload($hash_big, $big, 'rename');
+expect_true($commit_blocked === false, 'classic file_commit_payload blocked by storage quota');
+expect_true(!is_file(VAR_FILES . s2p($hash_big) . $hash_big), 'payload not installed when over quota');
 @unlink(VAR_FILES . 'quota-pad.bin');
+@unlink($big);
 $cfg['max_storage_bytes'] = 0;
+
+echo "== crypt_flag C3 vs C2 parsing ==\n";
+$link_c3 = $cfg['var_root'] . 'link-c3';
+file_put_contents($link_c3, "n\nm\n1\n\n-1\nhash\nO\n0\n\ncode\nC3\n");
+$parsed_c3 = jirafeau_get_link_from_path($link_c3);
+expect_true(!empty($parsed_c3['crypted']) && !empty($parsed_c3['crypt_v1']), 'C3 sets crypted + crypt_v1');
+$link_c2 = $cfg['var_root'] . 'link-c2';
+file_put_contents($link_c2, "n\nm\n1\n\n-1\nhash\nO\n0\n\ncode\nC2\n");
+$parsed_c2 = jirafeau_get_link_from_path($link_c2);
+expect_true(!empty($parsed_c2['crypted']) && empty($parsed_c2['crypt_v1']), 'C2 sets crypted without crypt_v1');
 
 // Atomic slot reserve + init.
 $cfg['max_concurrent_async'] = 1;
@@ -433,6 +463,7 @@ fclose($held);
 expect_true(trim($out) === 'FAIL', 'export without lock returns false');
 expect_true(strpos(file_get_contents(JIRAFEAU_CFG), $marker) !== false, 'previous config retained when lock unavailable');
 expect_true(strpos(file_get_contents(JIRAFEAU_CFG), 'should-not-appear') === false, 'failed export did not replace config');
+expect_true(is_file(JIRAFEAU_CFG), 'live config path remains present after failed export');
 
 echo "== Download password auth scope unified ==\n";
 expect_eq(
