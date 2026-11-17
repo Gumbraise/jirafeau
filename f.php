@@ -171,12 +171,13 @@ if (!empty($link['key'])) {
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
         exit;
     } else {
-        $auth_scope = 'download_password:' . $link_name;
+        $auth_scope = jirafeau_download_password_auth_scope($link_name);
         $retry_href = 'f.php?h=' . urlencode($link_name);
         if (!empty($crypt_key)) {
             $retry_href .= '&k=' . urlencode($crypt_key);
         }
-        if (jirafeau_auth_is_blocked($auth_scope, $cfg)) {
+        $attempt = jirafeau_auth_begin_attempt($auth_scope, $cfg);
+        if (!$attempt['allowed']) {
             http_response_code(429);
             require(JIRAFEAU_ROOT.'lib/template/header.php');
             jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $cfg, 'denied', false, $retry_href);
@@ -188,7 +189,6 @@ if (!empty($link['key'])) {
             jirafeau_auth_clear_failures($auth_scope, $cfg);
             $password_challenged = true;
         } else {
-            jirafeau_auth_register_failure($auth_scope, $cfg);
             require(JIRAFEAU_ROOT.'lib/template/header.php');
             echo '<div class="error"><p>' . t('ACCESS_KO') .
             '</p></div>';
@@ -239,9 +239,24 @@ if (!$password_challenged && !$do_download && !$do_preview) {
     exit;
 }
 
-/* Claim one-time links before any bytes are sent to close the race window. */
+/* Validate crypt key before claiming a one-time link so a bad key does not consume it. */
+$crypt_src = VAR_FILES . $p . $link['hash'];
+if ($link['crypted']) {
+    if (!jirafeau_crypt_key_is_valid($crypt_key) || !jirafeau_probe_decrypt_key($crypt_src, $crypt_key)) {
+        require(JIRAFEAU_ROOT.'lib/template/header.php');
+        jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $cfg, 'denied', false);
+        require(JIRAFEAU_ROOT.'lib/template/footer.php');
+        exit;
+    }
+}
+
+/* Claim one-time links before any bytes are sent to close the race window.
+ * A valid key (when encrypted) was probed above. Client abort / crash after
+ * claim may still finalize the link — Jirafeau cannot guarantee the browser
+ * received every byte. */
 $onetime_claim = false;
 $onetime_finalized = false;
+$onetime_abort = false;
 if ($link['onetime'] == 'O') {
     $onetime_claim = jirafeau_try_claim_onetime_link($link_name);
     if ($onetime_claim === false) {
@@ -250,11 +265,16 @@ if ($link['onetime'] == 'O') {
         require(JIRAFEAU_ROOT.'lib/template/footer.php');
         exit;
     }
-    register_shutdown_function(function () use (&$onetime_claim, &$onetime_finalized, $link) {
-        if ($onetime_claim !== false && !$onetime_finalized) {
-            jirafeau_finalize_onetime_claim($onetime_claim, $link);
-            $onetime_finalized = true;
+    register_shutdown_function(function () use (&$onetime_claim, &$onetime_finalized, &$onetime_abort, $link, $link_name) {
+        if ($onetime_claim === false || $onetime_finalized) {
+            return;
         }
+        if ($onetime_abort) {
+            jirafeau_release_onetime_claim($onetime_claim, $link_name);
+            return;
+        }
+        jirafeau_finalize_onetime_claim($onetime_claim, $link);
+        $onetime_finalized = true;
     });
 }
 
@@ -271,6 +291,7 @@ header('Content-Type: ' . $safe_mime);
 if ($cfg['file_hash'] == "md5") {
     header('Content-MD5: ' . hex_to_base64($link['hash']));
 }
+$stream_ok = true;
 if ($cfg['litespeed_workaround']) {
     // Work around that LiteSpeed truncates large files.
     // See https://www.litespeedtech.com/support/wiki/doku.php/litespeed_wiki:config:internal-redirect
@@ -286,11 +307,28 @@ if ($cfg['litespeed_workaround']) {
 }
 /* Read encrypted file (Sodium mode). */
 elseif ($link['crypted']) {
-    jirafeau_decrypt_file(VAR_FILES . $p . $link['hash'], 'php://output', $crypt_key);
+    $stream_ok = jirafeau_decrypt_file($crypt_src, 'php://output', $crypt_key);
+    if (!$stream_ok) {
+        $onetime_abort = true;
+        if ($onetime_claim !== false) {
+            jirafeau_release_onetime_claim($onetime_claim, $link_name);
+            $onetime_claim = false;
+        }
+        // Headers may already be sent; stop without finalizing the one-time link.
+        exit;
+    }
 }
 /* Read encrypted file (legacy mode using mcrypt). */
 elseif ($link['crypted_legacy']) {
-    jirafeau_decrypt_file_legacy(VAR_FILES . $p . $link['hash'], 'php://output', $crypt_key);
+    $stream_ok = jirafeau_decrypt_file_legacy($crypt_src, 'php://output', $crypt_key);
+    if (!$stream_ok) {
+        $onetime_abort = true;
+        if ($onetime_claim !== false) {
+            jirafeau_release_onetime_claim($onetime_claim, $link_name);
+            $onetime_claim = false;
+        }
+        exit;
+    }
 }
 /* Read file. */
 else {
@@ -298,7 +336,7 @@ else {
         $file_web_path = preg_replace('#^' . $_SERVER['DOCUMENT_ROOT'] . '#', '', VAR_FILES);
         header('X-Sendfile: ' . $file_web_path . $p . $link['hash']);
     } else {
-        $r = fopen(VAR_FILES . $p . $link['hash'], 'r');
+        $r = fopen($crypt_src, 'r');
         while (!feof($r)) {
             print fread($r, 1024);
         }
@@ -306,7 +344,7 @@ else {
     }
 }
 
-if ($onetime_claim !== false) {
+if ($onetime_claim !== false && $stream_ok) {
     jirafeau_finalize_onetime_claim($onetime_claim, $link);
     $onetime_finalized = true;
 }
