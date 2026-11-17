@@ -258,17 +258,17 @@ PHP;
     expect_true(strpos($exported, '<?php') === 0, 'concurrent export keeps PHP opening tag');
     expect_true(preg_match("/\\\$cfg = array/", $exported) === 1, 'concurrent export keeps valid \$cfg assignment');
 }
-// Non-writable target: fatal_on_error=false must return false (skip chmod games on Windows if needed).
-$deny_dir = $cfg['var_root'] . 'deny-cfg';
-@mkdir($deny_dir, 0700, true);
-$deny_cfg = $deny_dir . DIRECTORY_SEPARATOR . 'config.local.php';
-file_put_contents($deny_cfg, "<?php\n\$cfg = array();\n");
-if ($is_windows) {
-    echo "[SKIP] read-only config.local.php simulation on Windows — not executed\n";
+// chmod-based "read-only dir" checks are unreliable as root (CI containers) and on Windows.
+$running_as_root = function_exists('posix_geteuid') && posix_geteuid() === 0;
+if ($is_windows || $running_as_root) {
+    echo "[SKIP] read-only config directory chmod simulation — ineffective as root/Windows\n";
 } else {
+    $deny_dir = $cfg['var_root'] . 'deny-cfg';
+    @mkdir($deny_dir, 0700, true);
+    $deny_cfg = $deny_dir . DIRECTORY_SEPARATOR . 'config.local.php';
+    file_put_contents($deny_cfg, "<?php\n\$cfg = array();\n");
     @chmod($deny_cfg, 0444);
     @chmod($deny_dir, 0555);
-    // Cannot redefine JIRAFEAU_CFG; verify helper behaviour via a direct write attempt pattern:
     $content = '<?php' . "\n" . '$cfg = array();';
     $tmp = $deny_cfg . '.tmp.test';
     $wrote = @file_put_contents($tmp, $content);
