@@ -714,7 +714,8 @@ function jirafeau_file_commit_payload($hash, $src_path, $install_mode = 'rename'
                 if ($src_size === false) {
                     return false;
                 }
-                if ((jirafeau_storage_used_bytes() + $src_size) > $max_storage) {
+                $delta = jirafeau_storage_install_delta($src_path, $src_size, $install_mode);
+                if ((jirafeau_storage_used_bytes() + $delta) > $max_storage) {
                     return false;
                 }
             }
@@ -1851,6 +1852,54 @@ function jirafeau_storage_used_bytes()
         $used += jirafeau_dir_size(VAR_ASYNC);
     }
     return $used;
+}
+
+/**
+ * Whether $path is already inside VAR_FILES or VAR_ASYNC (already in storage_used).
+ */
+function jirafeau_path_in_storage_tree($path)
+{
+    if (!is_string($path) || $path === '') {
+        return false;
+    }
+    $real = @realpath($path);
+    if ($real === false) {
+        // File may exist but realpath failed; fall back to prefix match on normalized paths.
+        $real = str_replace('\\', '/', $path);
+    } else {
+        $real = str_replace('\\', '/', $real);
+    }
+    foreach (array('VAR_FILES', 'VAR_ASYNC') as $const) {
+        if (!defined($const) || !is_dir(constant($const))) {
+            continue;
+        }
+        $root = @realpath(constant($const));
+        $root = $root !== false ? str_replace('\\', '/', $root) : str_replace('\\', '/', constant($const));
+        $root = rtrim($root, '/');
+        if ($root !== '' && ($real === $root || strpos($real, $root . '/') === 0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Net storage increase when installing $src_path into VAR_FILES.
+ * Relocating an async/temp payload already counted in storage_used is a no-op for quota.
+ *
+ * @return int bytes to add to storage_used for the ceiling check
+ */
+function jirafeau_storage_install_delta($src_path, $src_size, $install_mode)
+{
+    $src_size = max(0, (int) $src_size);
+    if ($install_mode === 'symlink') {
+        return 0;
+    }
+    if (jirafeau_path_in_storage_tree($src_path)) {
+        // rename/move/copy+unlink within the storage tree does not grow usage.
+        return 0;
+    }
+    return $src_size;
 }
 
 /**
@@ -3490,52 +3539,15 @@ function jirafeau_export_cfg($cfg, $fatal_on_error = true)
         if (@file_put_contents($tmp_path, $content) === false) {
             throw new RuntimeException('tmp write failed');
         }
-        // Prefer atomic rename-over. Never move the live file aside first:
-        // a crash between backup and replace would leave no active config.
+        // Atomic replace only. Never truncate/move aside the live config: if
+        // rename-over fails (e.g. Windows), keep the previous file and fail.
         if (!is_file($cfg_path)) {
             $ok = @rename($tmp_path, $cfg_path);
         } else {
             $ok = @rename($tmp_path, $cfg_path);
-            if (!$ok) {
-                // Windows cannot rename over an existing path: overwrite in place
-                // so the path remains present for the whole operation.
-                $data = @file_get_contents($tmp_path);
-                if ($data === false) {
-                    throw new RuntimeException('tmp read failed');
-                }
-                $existing = @fopen($cfg_path, 'c+');
-                if ($existing === false) {
-                    throw new RuntimeException('cannot open live config');
-                }
-                if (!flock($existing, LOCK_EX | LOCK_NB)) {
-                    fclose($existing);
-                    throw new RuntimeException('cannot lock live config');
-                }
-                $wrote = false;
-                try {
-                    if (ftruncate($existing, 0) === false) {
-                        throw new RuntimeException('truncate failed');
-                    }
-                    rewind($existing);
-                    $n = fwrite($existing, $data);
-                    if ($n === false || $n !== strlen($data)) {
-                        throw new RuntimeException('in-place write failed');
-                    }
-                    fflush($existing);
-                    $wrote = true;
-                } finally {
-                    flock($existing, LOCK_UN);
-                    fclose($existing);
-                }
-                if (!$wrote) {
-                    throw new RuntimeException('in-place replace failed');
-                }
-                @unlink($tmp_path);
-                $ok = true;
-            }
         }
         if (!$ok) {
-            throw new RuntimeException('rename failed');
+            throw new RuntimeException('atomic replace failed; keeping existing config');
         }
     } catch (Throwable $e) {
         $ok = false;
