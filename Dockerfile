@@ -1,6 +1,12 @@
+# Require a base image that includes PHP2Shell fixes (CVE-2026-109618 / CVE-2026-109619).
+# First fixed 8.3 release: 8.3.36. Always rebuild with `docker build --pull`.
 FROM php:8.3-fpm-alpine
 LABEL org.opencontainers.image.authors="jerome@jutteau.fr"
 ARG INI="php"
+
+# Fail the build early if the pulled base image is still unpatched.
+RUN php -r 'exit(version_compare(PHP_VERSION, "8.3.36", "<") ? 1 : 0);' \
+    || (echo "Base image PHP $(php -r 'echo PHP_VERSION;') is older than required 8.3.36" >&2; exit 1)
 
 # base install
 RUN apk update && \
