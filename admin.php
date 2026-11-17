@@ -45,6 +45,10 @@ if (php_sapi_name() == "cli") {
     } elseif ((count($argv) > 1) && $argv[1] == 'clean_async') {
         $total = jirafeau_admin_clean_async();
         echo "$total old unfinished transfers deleted.\n";
+        $throttle = jirafeau_auth_throttle_cleanup();
+        if ($throttle > 0) {
+            echo "$throttle expired auth throttle state(s) removed.\n";
+        }
     } else {
         die("No command found. Should be admin.php <clean_expired|clean_async>.\n");
     }
@@ -71,19 +75,17 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
 
     if (!jirafeau_admin_is_authenticated()) {
         $authed = false;
-        /* Test HTTP authentication. */
-        if (!empty($cfg['admin_http_auth_user']) && isset($_SERVER['PHP_AUTH_USER'])) {
-            $http_users = is_array($cfg['admin_http_auth_user'])
-                ? $cfg['admin_http_auth_user']
-                : array($cfg['admin_http_auth_user']);
-            if (in_array($_SERVER['PHP_AUTH_USER'], $http_users, true)) {
-                jirafeau_admin_session_start();
-                $authed = true;
-            }
+        /* HTTP auth: trust only REMOTE_USER / REDIRECT_REMOTE_USER set by the
+         * web server after successful authentication. Never PHP_AUTH_USER /
+         * Authorization — those values can be supplied by the client. */
+        if (jirafeau_admin_http_auth_matches($cfg)) {
+            jirafeau_admin_session_start();
+            $authed = true;
         }
         /* Test web password authentication. */
         if (!$authed && !empty($cfg['admin_password']) && isset($_POST['admin_password']) && is_string($_POST['admin_password'])) {
-            if (jirafeau_auth_is_blocked('admin_login', $cfg)) {
+            $attempt = jirafeau_auth_begin_attempt('admin_login', $cfg);
+            if (!$attempt['allowed']) {
                 http_response_code(429);
                 require(JIRAFEAU_ROOT . 'lib/template/header.php');
                 jirafeau_show_page_error('BAD_PSW', 'BAD_PSW_BODY', $cfg, 'denied', false);
@@ -93,13 +95,17 @@ elseif (true === jirafeau_challenge_admin_ip($cfg, get_ip_address($cfg))) {
             if (jirafeau_verify_admin_password($_POST['admin_password'], $cfg['admin_password'])) {
                 jirafeau_auth_clear_failures('admin_login', $cfg);
                 if (jirafeau_admin_password_needs_rehash($cfg['admin_password'])) {
-                    $cfg['admin_password'] = jirafeau_hash_admin_password($_POST['admin_password']);
-                    jirafeau_export_cfg($cfg);
+                    $new_hash = jirafeau_hash_admin_password($_POST['admin_password']);
+                    $cfg['admin_password'] = $new_hash;
+                    // Non-blocking: login succeeds even if config.local.php is read-only.
+                    if (!jirafeau_export_cfg($cfg, false)) {
+                        error_log('Jirafeau: admin password rehash could not be persisted (config not writable)');
+                    }
                 }
                 jirafeau_admin_session_start();
                 $authed = true;
             } else {
-                jirafeau_auth_register_failure('admin_login', $cfg);
+                // Attempt already reserved by begin_attempt.
                 require(JIRAFEAU_ROOT . 'lib/template/header.php');
                 echo '<div class="error"><p>'. t('BAD_PSW') . '</p></div>';
                 require(JIRAFEAU_ROOT.'lib/template/footer.php');
