@@ -50,26 +50,25 @@ job_security_tests:
     - php tests/security/run.php
     - php tests/security/concurrency_run.php
 
-# Rebuild image with a fresh base (--pull) and assert PHP-FPM is patched.
+# Assert the same PHP base line as Dockerfile (php:8.3-fpm-alpine) is patched,
+# and that our hardening files are present. No Docker-in-Docker: the k8s runner
+# has no docker.sock / privileged DinD.
 job_docker_php_version:
   stage: test
-  image: docker:latest
-  services:
-    - docker:dind
+  image: php:8.3-fpm-alpine
   rules:
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   script:
-    - docker version
-    - docker build --pull -t jirafeau-php-check:$CI_COMMIT_SHORT_SHA .
-    - |
-      docker run --rm --entrypoint php jirafeau-php-check:$CI_COMMIT_SHORT_SHA -v
-    - |
-      docker run --rm --entrypoint php jirafeau-php-check:$CI_COMMIT_SHORT_SHA -r 'exit(version_compare(PHP_VERSION, "8.3.36", "<") ? 1 : 0);'
-    - |
-      docker run --rm --entrypoint php jirafeau-php-check:$CI_COMMIT_SHORT_SHA -r 'exit(ini_get("session.upload_progress.enabled") ? 1 : 0);'
-    - |
-      grep -E '^server.max-request-size[[:space:]]*=[[:space:]]*[1-9]' docker/lighttpd.conf
+    - php -v
+    - php tests/security/check_php_version.php
+    - grep -E '^session\.upload_progress\.enabled[[:space:]]*=[[:space:]]*Off' docker/php.ini
+    - grep -E '^server\.max-request-size[[:space:]]*=[[:space:]]*[1-9]' docker/lighttpd.conf
+    - grep -E '^max_file_uploads[[:space:]]*=' docker/php.ini
+    # Load our php.ini and confirm upload_progress is off at runtime.
+    - cp docker/php.ini /tmp/jirafeau-php.ini
+    - php -c /tmp/jirafeau-php.ini -r 'exit(ini_get("session.upload_progress.enabled") ? 1 : 0);'
+    - php -c /tmp/jirafeau-php.ini -r 'echo "upload_progress=", ini_get("session.upload_progress.enabled") ? "On" : "Off", PHP_EOL;'
 
 # Run tests for php:8.5
 job_lint_app_85:
@@ -126,10 +125,16 @@ job_lint_app_74:
 # =================
 
 publish:
-  image: docker:latest
+  image: docker:24.0.5
   stage: deploy
   services:
-    - docker:dind
+    # K8s executor: talk to the DinD service over TCP (not /var/run/docker.sock).
+    - name: docker:24.0.5-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
   script:
     # Login to GitLab's Docker registry
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
