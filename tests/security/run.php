@@ -200,11 +200,34 @@ unset($_SERVER['PHP_AUTH_USER'], $_SERVER['HTTP_AUTHORIZATION'], $_SERVER['REMOT
 
 echo "== H-11 non-blocking / atomic export ==\n";
 $cfg_snapshot = array('installation_done' => true, 'admin_password' => 'x', 'title' => 'ro-test');
+$is_windows = strncasecmp(PHP_OS, 'WIN', 3) === 0;
+if (is_file(JIRAFEAU_CFG)) {
+    $prev_cfg = file_get_contents(JIRAFEAU_CFG);
+    $over = jirafeau_export_cfg(array('installation_done' => true, 'title' => 'no-truncate-fallback'), false);
+    if ($over === false) {
+        // Platforms where rename-over fails must keep the previous file untouched.
+        expect_eq(file_get_contents(JIRAFEAU_CFG), $prev_cfg, 'failed atomic replace leaves previous config bytes unchanged');
+        @unlink(JIRAFEAU_CFG);
+    } else {
+        expect_true(
+            strpos(file_get_contents(JIRAFEAU_CFG), 'no-truncate-fallback') !== false,
+            'atomic rename-over replaces config without truncate fallback'
+        );
+    }
+}
 $ok_write = jirafeau_export_cfg($cfg_snapshot, false);
-expect_true($ok_write === true, 'export_cfg succeeds on writable JIRAFEAU_CFG');
+if ($ok_write !== true && is_file(JIRAFEAU_CFG)) {
+    // Target still occupied and rename-over unavailable: free the path then retry.
+    @unlink(JIRAFEAU_CFG);
+    $ok_write = jirafeau_export_cfg($cfg_snapshot, false);
+}
+expect_true($ok_write === true, 'export_cfg succeeds when atomic replace is possible or path is free');
 expect_true(strpos(file_get_contents(JIRAFEAU_CFG), 'ro-test') !== false, 'exported title persisted');
-// Concurrent exports: last writer wins without corrupting PHP syntax.
-$export_worker = <<<'PHP'
+if ($is_windows) {
+    echo "[SKIP] concurrent export stress on Windows — optional\n";
+} else {
+    // Concurrent exports: last writer wins without corrupting PHP syntax.
+    $export_worker = <<<'PHP'
 <?php
 define('JIRAFEAU_ROOT', getenv('JF_ROOT'));
 define('JIRAFEAU_CFG', getenv('JF_CFG'));
@@ -213,36 +236,35 @@ require JIRAFEAU_ROOT . 'lib/functions.php';
 $id = getenv('JF_ID');
 jirafeau_export_cfg(array('installation_done' => true, 'title' => 'w' . $id), false);
 PHP;
-$ew = $cfg['var_root'] . 'export_worker.php';
-file_put_contents($ew, $export_worker);
-$eprocs = array();
-for ($i = 0; $i < 4; $i++) {
-    $desc = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
-    $env = array('JF_ROOT' => JIRAFEAU_ROOT, 'JF_CFG' => JIRAFEAU_CFG, 'JF_ID' => (string) $i) + $_ENV;
-    $eprocs[] = proc_open(PHP_BINARY . ' ' . escapeshellarg($ew), $desc, $pipes, null, $env);
-    if (is_resource($eprocs[$i])) {
-        fclose($pipes[0]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+    $ew = $cfg['var_root'] . 'export_worker.php';
+    file_put_contents($ew, $export_worker);
+    $eprocs = array();
+    for ($i = 0; $i < 4; $i++) {
+        $desc = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
+        $env = array('JF_ROOT' => JIRAFEAU_ROOT, 'JF_CFG' => JIRAFEAU_CFG, 'JF_ID' => (string) $i) + $_ENV;
+        $eprocs[] = proc_open(PHP_BINARY . ' ' . escapeshellarg($ew), $desc, $pipes, null, $env);
+        if (is_resource($eprocs[$i])) {
+            fclose($pipes[0]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+        }
     }
-}
-foreach ($eprocs as $p) {
-    if (is_resource($p)) {
-        proc_close($p);
+    foreach ($eprocs as $p) {
+        if (is_resource($p)) {
+            proc_close($p);
+        }
     }
+    $exported = file_get_contents(JIRAFEAU_CFG);
+    expect_true(strpos($exported, '<?php') === 0, 'concurrent export keeps PHP opening tag');
+    expect_true(preg_match("/\\\$cfg = array/", $exported) === 1, 'concurrent export keeps valid \$cfg assignment');
 }
-$exported = file_get_contents(JIRAFEAU_CFG);
-expect_true(strpos($exported, '<?php') === 0, 'concurrent export keeps PHP opening tag');
-expect_true(preg_match("/\\\$cfg = array/", $exported) === 1, 'concurrent export keeps valid \$cfg assignment');
 // Non-writable target: fatal_on_error=false must return false (skip chmod games on Windows if needed).
 $deny_dir = $cfg['var_root'] . 'deny-cfg';
 @mkdir($deny_dir, 0700, true);
 $deny_cfg = $deny_dir . DIRECTORY_SEPARATOR . 'config.local.php';
 file_put_contents($deny_cfg, "<?php\n\$cfg = array();\n");
-$skip_ro = false;
-if (strncasecmp(PHP_OS, 'WIN', 3) === 0) {
+if ($is_windows) {
     echo "[SKIP] read-only config.local.php simulation on Windows — not executed\n";
-    $skip_ro = true;
 } else {
     @chmod($deny_cfg, 0444);
     @chmod($deny_dir, 0555);
@@ -254,7 +276,6 @@ if (strncasecmp(PHP_OS, 'WIN', 3) === 0) {
     @chmod($deny_dir, 0700);
     @chmod($deny_cfg, 0600);
 }
-unset($skip_ro);
 
 echo "== H-13 IPv6 CIDR ==\n";
 expect_true(jirafeau_ip_in_cidr('192.168.1.10', '192.168.1.0/24'), 'IPv4 CIDR match');
@@ -402,6 +423,20 @@ expect_true($commit_blocked === false, 'classic file_commit_payload blocked by s
 expect_true(!is_file(VAR_FILES . s2p($hash_big) . $hash_big), 'payload not installed when over quota');
 @unlink(VAR_FILES . 'quota-pad.bin');
 @unlink($big);
+
+// Async finalize: source already in VAR_ASYNC must not be double-counted.
+$async_src = VAR_ASYNC . 'async-fin-600.bin';
+file_put_contents($async_src, str_repeat('z', 600));
+expect_true(jirafeau_path_in_storage_tree($async_src), 'async temp path is inside storage tree');
+expect_eq(jirafeau_storage_install_delta($async_src, 600, 'rename'), 0, 'async rename install delta is zero');
+$cfg['max_storage_bytes'] = 1000;
+$hash_async = str_repeat('f', 32);
+$commit_async = jirafeau_file_commit_payload($hash_async, $async_src, 'rename');
+expect_true($commit_async !== false, 'async finalize allowed when 600-byte payload fits 1000-byte quota');
+expect_true(is_file(VAR_FILES . s2p($hash_async) . $hash_async), 'async payload installed under quota');
+expect_true(!is_file($async_src), 'async source consumed by rename');
+// Clean installed payload for later tests.
+jirafeau_file_refcount_adjust($hash_async, -1);
 $cfg['max_storage_bytes'] = 0;
 
 echo "== crypt_flag C3 vs C2 parsing ==\n";
@@ -431,7 +466,13 @@ jirafeau_async_slots_reconcile();
 
 echo "== export_cfg keeps previous file on failure ==\n";
 $marker = 'keep-me-' . bin2hex(random_bytes(4));
-jirafeau_export_cfg(array('installation_done' => true, 'title' => $marker), false);
+if (is_file(JIRAFEAU_CFG)) {
+    @unlink(JIRAFEAU_CFG);
+}
+expect_true(
+    jirafeau_export_cfg(array('installation_done' => true, 'title' => $marker), false) === true,
+    'baseline config written on free path'
+);
 expect_true(strpos(file_get_contents(JIRAFEAU_CFG), $marker) !== false, 'baseline config written');
 // Simulate lock held by another process: open lock and hold EX, child export must fail and keep file.
 $lock_path = JIRAFEAU_CFG . '.lock';
