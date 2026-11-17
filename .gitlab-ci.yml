@@ -67,8 +67,14 @@ job_docker_php_version:
     - grep -E '^max_file_uploads[[:space:]]*=' docker/php.ini
     # Load our php.ini and confirm upload_progress is off at runtime.
     - cp docker/php.ini /tmp/jirafeau-php.ini
-    - php -c /tmp/jirafeau-php.ini -r 'exit(ini_get("session.upload_progress.enabled") ? 1 : 0);'
-    - php -c /tmp/jirafeau-php.ini -r 'echo "upload_progress=", ini_get("session.upload_progress.enabled") ? "On" : "Off", PHP_EOL;'
+    - >
+      php -c /tmp/jirafeau-php.ini -r
+      'exit(ini_get("session.upload_progress.enabled") ? 1 : 0);'
+    - >
+      php -c /tmp/jirafeau-php.ini -r
+      'echo "upload_progress=",
+      ini_get("session.upload_progress.enabled") ? "On" : "Off",
+      PHP_EOL;'
 
 # Run tests for php:8.5
 job_lint_app_85:
