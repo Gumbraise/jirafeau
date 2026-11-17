@@ -287,27 +287,64 @@ expect_true(!jirafeau_reject_browser_cross_site_upload($cfg), 'allows non-browse
 
 echo "== H-04 crypt key / decrypt ==\n";
 if (extension_loaded('sodium')) {
-    $plain = str_repeat('hello-crypt-', 20);
+    if (!defined('JIRAFEAU_CRYPT_MAGIC_V1')) {
+        define('JIRAFEAU_CRYPT_MAGIC_V1', 'JFCR1');
+    }
+    $plain = str_repeat('A', 3072);
     $src = $cfg['var_root'] . 'plain.bin';
     $enc = $cfg['var_root'] . 'enc.bin';
     $dec = $cfg['var_root'] . 'dec.bin';
     file_put_contents($src, $plain);
     $key = jirafeau_encrypt_file($src, $enc);
     expect_true(jirafeau_crypt_key_is_valid($key), 'generated key length valid');
+    expect_true(strpos(file_get_contents($enc), JIRAFEAU_CRYPT_MAGIC_V1) === 0, 'v1 ciphertext starts with magic');
     expect_true(jirafeau_probe_decrypt_key($enc, $key), 'probe accepts good key');
     expect_true(!jirafeau_probe_decrypt_key($enc, str_repeat('0', 32)), 'probe rejects wrong key');
     expect_true(!jirafeau_crypt_key_is_valid('short'), 'malformed key rejected');
     expect_true(jirafeau_decrypt_file($enc, $dec, $key), 'decrypt good key');
     expect_eq(file_get_contents($dec), $plain, 'decrypt restores plaintext');
     expect_true(!jirafeau_decrypt_file($enc, $dec . '.bad', str_repeat('1', 32)), 'decrypt wrong key fails');
+
+    // Truncation after complete frames but before TAG_FINAL must fail for v1.
+    $full_enc = file_get_contents($enc);
+    expect_true(strlen($full_enc) > 2048, 'ciphertext larger than 2048 for truncation case');
     $trunc = $cfg['var_root'] . 'trunc.bin';
-    file_put_contents($trunc, substr(file_get_contents($enc), 0, 40));
-    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t', $key), 'truncated ciphertext fails');
+    file_put_contents($trunc, substr($full_enc, 0, 2048));
+    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t', $key), 'truncated v1 ciphertext (2048/full) fails');
+    file_put_contents($trunc, substr($full_enc, 0, 40));
+    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t2', $key), 'short truncated ciphertext fails');
+
+    $trail = $cfg['var_root'] . 'trail.bin';
+    file_put_contents($trail, $full_enc . 'EXTRA');
+    expect_true(!jirafeau_decrypt_file($trail, $dec . '.tr', $key), 'trailing bytes after v1 final are rejected');
+
     $tampered = $cfg['var_root'] . 'tamp.bin';
-    $blob = file_get_contents($enc);
+    $blob = $full_enc;
     $blob[strlen($blob) - 5] = $blob[strlen($blob) - 5] === 'A' ? 'B' : 'A';
     file_put_contents($tampered, $blob);
     expect_true(!jirafeau_decrypt_file($tampered, $dec . '.x', $key), 'tampered ciphertext fails');
+
+    // Legacy Sodium layout (no magic, no TAG_FINAL) still decrypts when complete.
+    $legacy = $cfg['var_root'] . 'legacy.bin';
+    $legacy_dec = $cfg['var_root'] . 'legacy.out';
+    $legacy_key = bin2hex(random_bytes(SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_KEYBYTES / 2));
+    [$st, $hdr] = sodium_crypto_secretstream_xchacha20poly1305_init_push($legacy_key);
+    $lw = fopen($legacy, 'wb');
+    fwrite($lw, $hdr);
+    for ($i = 0; $i < strlen($plain); $i += JIRAFEAU_SODIUM_CHUNKSIZE) {
+        $piece = substr($plain, $i, JIRAFEAU_SODIUM_CHUNKSIZE);
+        fwrite($lw, sodium_crypto_secretstream_xchacha20poly1305_push($st, $piece));
+    }
+    fclose($lw);
+    expect_true(jirafeau_decrypt_file($legacy, $legacy_dec, $legacy_key), 'legacy complete ciphertext still accepted');
+    expect_eq(file_get_contents($legacy_dec), $plain, 'legacy decrypt restores plaintext');
+    $legacy_trunc = $cfg['var_root'] . 'legacy-trunc.bin';
+    file_put_contents($legacy_trunc, substr(file_get_contents($legacy), 0, 2048));
+    // Legacy without FINAL cannot prove completeness; truncated-between-frames may still look "complete".
+    // We only assert mid-frame truncation fails:
+    $legacy_mid = $cfg['var_root'] . 'legacy-mid.bin';
+    file_put_contents($legacy_mid, substr(file_get_contents($legacy), 0, 50));
+    expect_true(!jirafeau_decrypt_file($legacy_mid, $dec . '.lm', $legacy_key), 'legacy mid-frame truncation fails');
 
     $ot = 'cryptot01';
     $ot_path = VAR_LINKS . s2p($ot) . $ot;
@@ -337,6 +374,65 @@ $q = jirafeau_upload_quota_check($cfg, '127.0.0.1');
 expect_true(is_string($q) && strpos($q, 'Error:') === 0, 'blocks when concurrent async exceeded');
 @unlink(VAR_ASYNC . s2p($aref) . $aref);
 $cfg['max_concurrent_async'] = 0;
+
+// Storage ceiling accounts for additional bytes (as async_push does under lock).
+@file_put_contents(VAR_FILES . 'quota-pad.bin', str_repeat('x', 80));
+$cfg['max_storage_bytes'] = 100;
+$qpad = jirafeau_upload_quota_check_unlocked($cfg, null, 30);
+expect_true(is_string($qpad) && strpos($qpad, 'storage quota') !== false, 'additional write beyond storage ceiling rejected');
+expect_true(jirafeau_upload_quota_check_unlocked($cfg, null, 5) === true, 'additional write within ceiling allowed');
+@unlink(VAR_FILES . 'quota-pad.bin');
+$cfg['max_storage_bytes'] = 0;
+
+// Atomic slot reserve + init.
+$cfg['max_concurrent_async'] = 1;
+$cfg['async_init_rate_per_minute'] = 0;
+jirafeau_async_slots_write_unlocked(0);
+$init1 = jirafeau_async_init('a.bin', 'application/octet-stream', false, '', time() + 3600, '127.0.0.1');
+expect_true(strpos($init1, 'Error:') !== 0, 'first async_init under slot ceiling succeeds');
+$init2 = jirafeau_async_init('b.bin', 'application/octet-stream', false, '', time() + 3600, '127.0.0.1');
+expect_true(strpos($init2, 'Error:') === 0, 'second async_init blocked by atomic slot ceiling');
+$ref1 = strtok($init1, "\n");
+if (jirafeau_is_valid_async_ref($ref1)) {
+    jirafeau_async_delete($ref1);
+}
+$cfg['max_concurrent_async'] = 0;
+jirafeau_async_slots_reconcile();
+
+echo "== export_cfg keeps previous file on failure ==\n";
+$marker = 'keep-me-' . bin2hex(random_bytes(4));
+jirafeau_export_cfg(array('installation_done' => true, 'title' => $marker), false);
+expect_true(strpos(file_get_contents(JIRAFEAU_CFG), $marker) !== false, 'baseline config written');
+// Simulate lock held by another process: open lock and hold EX, child export must fail and keep file.
+$lock_path = JIRAFEAU_CFG . '.lock';
+$held = fopen($lock_path, 'c');
+expect_true($held && flock($held, LOCK_EX), 'test holds config lock');
+$child = <<<'PHP'
+<?php
+define('JIRAFEAU_ROOT', getenv('JF_ROOT'));
+define('JIRAFEAU_CFG', getenv('JF_CFG'));
+define('NL', "\n");
+require JIRAFEAU_ROOT . 'lib/functions.php';
+$ok = jirafeau_export_cfg(array('installation_done' => true, 'title' => 'should-not-appear'), false);
+echo $ok ? "OK\n" : "FAIL\n";
+PHP;
+$child_file = $cfg['var_root'] . 'export_fail_child.php';
+file_put_contents($child_file, $child);
+$desc = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
+$proc = proc_open(PHP_BINARY . ' ' . escapeshellarg($child_file), $desc, $pipes, null, array(
+    'JF_ROOT' => JIRAFEAU_ROOT,
+    'JF_CFG' => JIRAFEAU_CFG,
+) + $_ENV);
+$out = stream_get_contents($pipes[1]);
+fclose($pipes[0]);
+fclose($pipes[1]);
+fclose($pipes[2]);
+proc_close($proc);
+flock($held, LOCK_UN);
+fclose($held);
+expect_true(trim($out) === 'FAIL', 'export without lock returns false');
+expect_true(strpos(file_get_contents(JIRAFEAU_CFG), $marker) !== false, 'previous config retained when lock unavailable');
+expect_true(strpos(file_get_contents(JIRAFEAU_CFG), 'should-not-appear') === false, 'failed export did not replace config');
 
 echo "== Download password auth scope unified ==\n";
 expect_eq(

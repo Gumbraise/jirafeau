@@ -488,6 +488,69 @@ $cfg['proxy_ip'] = array();
 expect_true(jirafeau_auth_is_blocked($scope2, $cfg, $max_att, 120), 'blocked for client after concurrent reservations');
 jirafeau_auth_clear_failures($scope2, $cfg);
 
+echo "== Parallel async_init respects atomic slot ceiling ==\n";
+$cfg['max_concurrent_async'] = 2;
+$cfg['async_init_rate_per_minute'] = 0;
+$cfg['max_storage_bytes'] = 0;
+jirafeau_async_slots_reconcile();
+$slot_worker = <<<'PHP'
+<?php
+define('JIRAFEAU_ROOT', getenv('JF_ROOT'));
+$var_root = getenv('JF_VAR');
+define('VAR_FILES', $var_root . 'files/');
+define('VAR_LINKS', $var_root . 'links/');
+define('VAR_ASYNC', $var_root . 'async/');
+define('NL', "\n");
+define('JIRAFEAU_ASYNC_CODE_LENGTH', 16);
+define('JIRAFEAU_DELETE_CODE_LENGTH', 32);
+require JIRAFEAU_ROOT . 'lib/functions.php';
+$cfg = array(
+    'max_concurrent_async' => 2,
+    'async_init_rate_per_minute' => 0,
+    'max_storage_bytes' => 0,
+    'proxy_ip' => array(),
+);
+$r = jirafeau_async_init('p.bin', 'application/octet-stream', false, '', time() + 3600, '127.0.0.1');
+file_put_contents(getenv('JF_OUT') . '/' . getmypid() . '.txt', $r);
+PHP;
+$sw = $var_root . 'slot_worker.php';
+file_put_contents($sw, $slot_worker);
+$slot_out = $var_root . 'slot_out/';
+@mkdir($slot_out, 0700, true);
+$sprocs = array();
+for ($i = 0; $i < 8; $i++) {
+    $desc = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
+    $sprocs[] = proc_open(PHP_BINARY . ' ' . escapeshellarg($sw), $desc, $pipes, null, array(
+        'JF_ROOT' => JIRAFEAU_ROOT,
+        'JF_VAR' => $var_root,
+        'JF_OUT' => $slot_out,
+    ) + $_ENV);
+    if (is_resource($sprocs[$i])) {
+        fclose($pipes[0]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+    }
+}
+foreach ($sprocs as $proc) {
+    if (is_resource($proc)) {
+        proc_close($proc);
+    }
+}
+$ok_slots = 0;
+$err_slots = 0;
+foreach (glob($slot_out . '*.txt') ?: array() as $f) {
+    $body = trim(file_get_contents($f));
+    if (strpos($body, 'Error:') === 0) {
+        $err_slots++;
+    } else {
+        $ok_slots++;
+    }
+}
+expect_true($ok_slots === 2, 'exactly 2 parallel async_init succeed under ceiling (got ' . $ok_slots . ')');
+expect_true($err_slots === 6, 'remaining parallel async_init rejected (got ' . $err_slots . ')');
+expect_eq(jirafeau_count_async_transfers(), 2, 'live async metas match ceiling');
+$cfg['max_concurrent_async'] = 0;
+
 echo "== Compose passes restriction env keys ==\n";
 $compose = file_get_contents(JIRAFEAU_ROOT . 'docker-compose.yaml');
 expect_true(strpos($compose, 'ADMIN_IP:') !== false, 'docker-compose transmits ADMIN_IP');
