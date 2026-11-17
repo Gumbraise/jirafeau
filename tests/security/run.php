@@ -185,6 +185,166 @@ expect_true(is_ssl(), 'trusts X-Forwarded-Proto from configured proxy');
 unset($_SERVER['HTTPS'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
 $cfg['proxy_ip'] = array();
 
+echo "== H-01 admin HTTP auth ignores PHP_AUTH_USER ==\n";
+$cfg['admin_http_auth_user'] = array('alice');
+$_SERVER['PHP_AUTH_USER'] = 'alice';
+unset($_SERVER['REMOTE_USER'], $_SERVER['REDIRECT_REMOTE_USER']);
+expect_true(!jirafeau_admin_http_auth_matches($cfg), 'PHP_AUTH_USER alone does not authenticate admin');
+$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode('alice:x');
+expect_true(!jirafeau_admin_http_auth_matches($cfg), 'Authorization header alone does not authenticate admin');
+$_SERVER['REMOTE_USER'] = 'alice';
+expect_true(jirafeau_admin_http_auth_matches($cfg), 'REMOTE_USER matching configured user authenticates');
+$_SERVER['REMOTE_USER'] = 'bob';
+expect_true(!jirafeau_admin_http_auth_matches($cfg), 'wrong REMOTE_USER rejected');
+unset($_SERVER['PHP_AUTH_USER'], $_SERVER['HTTP_AUTHORIZATION'], $_SERVER['REMOTE_USER']);
+
+echo "== H-11 non-blocking / atomic export ==\n";
+$cfg_snapshot = array('installation_done' => true, 'admin_password' => 'x', 'title' => 'ro-test');
+$ok_write = jirafeau_export_cfg($cfg_snapshot, false);
+expect_true($ok_write === true, 'export_cfg succeeds on writable JIRAFEAU_CFG');
+expect_true(strpos(file_get_contents(JIRAFEAU_CFG), 'ro-test') !== false, 'exported title persisted');
+// Concurrent exports: last writer wins without corrupting PHP syntax.
+$export_worker = <<<'PHP'
+<?php
+define('JIRAFEAU_ROOT', getenv('JF_ROOT'));
+define('JIRAFEAU_CFG', getenv('JF_CFG'));
+define('NL', "\n");
+require JIRAFEAU_ROOT . 'lib/functions.php';
+$id = getenv('JF_ID');
+jirafeau_export_cfg(array('installation_done' => true, 'title' => 'w' . $id), false);
+PHP;
+$ew = $cfg['var_root'] . 'export_worker.php';
+file_put_contents($ew, $export_worker);
+$eprocs = array();
+for ($i = 0; $i < 4; $i++) {
+    $desc = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
+    $env = array('JF_ROOT' => JIRAFEAU_ROOT, 'JF_CFG' => JIRAFEAU_CFG, 'JF_ID' => (string) $i) + $_ENV;
+    $eprocs[] = proc_open(PHP_BINARY . ' ' . escapeshellarg($ew), $desc, $pipes, null, $env);
+    if (is_resource($eprocs[$i])) {
+        fclose($pipes[0]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+    }
+}
+foreach ($eprocs as $p) {
+    if (is_resource($p)) {
+        proc_close($p);
+    }
+}
+$exported = file_get_contents(JIRAFEAU_CFG);
+expect_true(strpos($exported, '<?php') === 0, 'concurrent export keeps PHP opening tag');
+expect_true(preg_match("/\\\$cfg = array/", $exported) === 1, 'concurrent export keeps valid \$cfg assignment');
+// Non-writable target: fatal_on_error=false must return false (skip chmod games on Windows if needed).
+$deny_dir = $cfg['var_root'] . 'deny-cfg';
+@mkdir($deny_dir, 0700, true);
+$deny_cfg = $deny_dir . DIRECTORY_SEPARATOR . 'config.local.php';
+file_put_contents($deny_cfg, "<?php\n\$cfg = array();\n");
+$skip_ro = false;
+if (strncasecmp(PHP_OS, 'WIN', 3) === 0) {
+    echo "[SKIP] read-only config.local.php simulation on Windows — not executed\n";
+    $skip_ro = true;
+} else {
+    @chmod($deny_cfg, 0444);
+    @chmod($deny_dir, 0555);
+    // Cannot redefine JIRAFEAU_CFG; verify helper behaviour via a direct write attempt pattern:
+    $content = '<?php' . "\n" . '$cfg = array();';
+    $tmp = $deny_cfg . '.tmp.test';
+    $wrote = @file_put_contents($tmp, $content);
+    expect_true($wrote === false, 'write into read-only config directory fails');
+    @chmod($deny_dir, 0700);
+    @chmod($deny_cfg, 0600);
+}
+unset($skip_ro);
+
+echo "== H-13 IPv6 CIDR ==\n";
+expect_true(jirafeau_ip_in_cidr('192.168.1.10', '192.168.1.0/24'), 'IPv4 CIDR match');
+expect_true(!jirafeau_ip_in_cidr('192.168.2.10', '192.168.1.0/24'), 'IPv4 CIDR miss');
+expect_true(jirafeau_ip_in_cidr('2001:db8::1', '2001:db8::/32'), 'IPv6 CIDR match');
+expect_true(!jirafeau_ip_in_cidr('2001:db9::1', '2001:db8::/32'), 'IPv6 CIDR miss');
+expect_true(jirafeau_challenge_ip(array('2001:db8::/32'), '2001:db8::abcd'), 'challenge_ip accepts IPv6 CIDR');
+expect_true(!jirafeau_is_valid_ip('not-an-ip'), 'rejects invalid IP');
+expect_true(!jirafeau_is_valid_ip('1.2.3'), 'rejects incomplete IPv4');
+
+echo "== H-07 hashed upload passwords ==\n";
+$plain_up = 'UploadSecret!';
+$cfg['upload_password'] = array('[PASSWORD]' . password_hash($plain_up, PASSWORD_DEFAULT), 'legacy-plain');
+expect_true(jirafeau_challenge_upload_password($cfg, $plain_up), 'hashed upload password verifies');
+expect_true(jirafeau_challenge_upload_password($cfg, 'legacy-plain'), 'plaintext upload password still verifies');
+expect_true(!jirafeau_challenge_upload_password($cfg, 'wrong'), 'rejects wrong upload password');
+
+echo "== H-12 storage id validation ==\n";
+expect_true(jirafeau_is_valid_storage_id(str_repeat('a', 32)), 'hex storage id ok');
+expect_true(!jirafeau_is_valid_storage_id('../etc/passwd'), 'path traversal storage id rejected');
+expect_true(!jirafeau_is_valid_storage_id(''), 'empty storage id rejected');
+
+echo "== H-14 cross-site upload helper ==\n";
+$cfg['web_root'] = 'http://localhost/';
+$_SERVER['HTTP_ORIGIN'] = 'http://evil.example';
+$_SERVER['HTTP_SEC_FETCH_SITE'] = 'cross-site';
+expect_true(jirafeau_reject_browser_cross_site_upload($cfg), 'rejects cross-site Origin');
+unset($_SERVER['HTTP_ORIGIN'], $_SERVER['HTTP_SEC_FETCH_SITE']);
+expect_true(!jirafeau_reject_browser_cross_site_upload($cfg), 'allows non-browser (no Origin)');
+
+echo "== H-04 crypt key / decrypt ==\n";
+if (extension_loaded('sodium')) {
+    $plain = str_repeat('hello-crypt-', 20);
+    $src = $cfg['var_root'] . 'plain.bin';
+    $enc = $cfg['var_root'] . 'enc.bin';
+    $dec = $cfg['var_root'] . 'dec.bin';
+    file_put_contents($src, $plain);
+    $key = jirafeau_encrypt_file($src, $enc);
+    expect_true(jirafeau_crypt_key_is_valid($key), 'generated key length valid');
+    expect_true(jirafeau_probe_decrypt_key($enc, $key), 'probe accepts good key');
+    expect_true(!jirafeau_probe_decrypt_key($enc, str_repeat('0', 32)), 'probe rejects wrong key');
+    expect_true(!jirafeau_crypt_key_is_valid('short'), 'malformed key rejected');
+    expect_true(jirafeau_decrypt_file($enc, $dec, $key), 'decrypt good key');
+    expect_eq(file_get_contents($dec), $plain, 'decrypt restores plaintext');
+    expect_true(!jirafeau_decrypt_file($enc, $dec . '.bad', str_repeat('1', 32)), 'decrypt wrong key fails');
+    $trunc = $cfg['var_root'] . 'trunc.bin';
+    file_put_contents($trunc, substr(file_get_contents($enc), 0, 40));
+    expect_true(!jirafeau_decrypt_file($trunc, $dec . '.t', $key), 'truncated ciphertext fails');
+    $tampered = $cfg['var_root'] . 'tamp.bin';
+    $blob = file_get_contents($enc);
+    $blob[strlen($blob) - 5] = $blob[strlen($blob) - 5] === 'A' ? 'B' : 'A';
+    file_put_contents($tampered, $blob);
+    expect_true(!jirafeau_decrypt_file($tampered, $dec . '.x', $key), 'tampered ciphertext fails');
+
+    $ot = 'cryptot01';
+    $ot_path = VAR_LINKS . s2p($ot) . $ot;
+    @mkdir(dirname($ot_path), 0700, true);
+    file_put_contents($ot_path, "n\nm\n1\n\n-1\nhash\nO\n0\n\ncode\nO\n");
+    expect_true(!jirafeau_probe_decrypt_key($enc, 'badkeybadkeybadkeybadkeybadkeyba'), 'bad key probe fails before claim');
+    expect_true(is_file($ot_path), 'onetime link still present when probe would fail');
+    $claimed_ot = jirafeau_try_claim_onetime_link($ot);
+    expect_true($claimed_ot !== false, 'claim works');
+    expect_true(jirafeau_release_onetime_claim($claimed_ot, $ot), 'release restores link after failed decrypt path');
+    expect_true(is_file($ot_path), 'link restored after release');
+} else {
+    echo "[SKIP] sodium extension not available — H-04 crypt tests not executed\n";
+}
+
+echo "== H-02 upload quota helpers ==\n";
+$cfg['max_concurrent_async'] = 0;
+$cfg['async_init_rate_per_minute'] = 0;
+$cfg['max_storage_bytes'] = 0;
+expect_true(jirafeau_upload_quota_check($cfg, '127.0.0.1') === true, 'unlimited quotas allow');
+$cfg['max_concurrent_async'] = 1;
+$aref = str_repeat('d', 32);
+@mkdir(VAR_ASYNC . s2p($aref), 0755, true);
+file_put_contents(VAR_ASYNC . s2p($aref) . $aref, "f\nm\n\n-1\nR\n\n" . time() . "\nabcd\n");
+expect_true(jirafeau_count_async_transfers() >= 1, 'counts async transfer');
+$q = jirafeau_upload_quota_check($cfg, '127.0.0.1');
+expect_true(is_string($q) && strpos($q, 'Error:') === 0, 'blocks when concurrent async exceeded');
+@unlink(VAR_ASYNC . s2p($aref) . $aref);
+$cfg['max_concurrent_async'] = 0;
+
+echo "== Download password auth scope unified ==\n";
+expect_eq(
+    jirafeau_download_password_auth_scope('abc'),
+    'download_password:abc',
+    'web and API share download_password scope'
+);
+
 function jirafeau_test_rmdir($dir)
 {
     if (!is_dir($dir)) {

@@ -422,6 +422,72 @@ expect_true(jirafeau_auth_is_blocked($scope, $cfg, 3, 60), 'blocked after max fa
 jirafeau_auth_clear_failures($scope, $cfg);
 expect_true(!jirafeau_auth_is_blocked($scope, $cfg, 3, 60), 'cleared after success');
 
+echo "== Atomic begin_attempt under parallel workers ==\n";
+$scope2 = 'parallel_login';
+jirafeau_auth_clear_failures($scope2, $cfg);
+$auth_worker = <<<'PHP'
+<?php
+define('JIRAFEAU_ROOT', getenv('JF_ROOT'));
+$var_root = getenv('JF_VAR');
+define('VAR_FILES', $var_root . 'files/');
+define('VAR_LINKS', $var_root . 'links/');
+define('VAR_ASYNC', $var_root . 'async/');
+define('NL', "\n");
+require JIRAFEAU_ROOT . 'lib/functions.php';
+$cfg = array('proxy_ip' => array());
+$_SERVER['REMOTE_ADDR'] = getenv('JF_IP');
+$scope = getenv('JF_SCOPE');
+$max = (int) getenv('JF_MAX');
+$r = jirafeau_auth_begin_attempt($scope, $cfg, $max, 120, 900);
+file_put_contents(getenv('JF_OUT') . '/' . getmypid() . '.json', json_encode($r));
+PHP;
+$auth_worker_file = $var_root . 'auth_worker.php';
+file_put_contents($auth_worker_file, $auth_worker);
+$out_dir = $var_root . 'auth_out/';
+@mkdir($out_dir, 0700, true);
+$max_att = 5;
+$auth_env = array(
+    'JF_ROOT' => JIRAFEAU_ROOT,
+    'JF_VAR' => $var_root,
+    'JF_IP' => '198.51.100.10',
+    'JF_SCOPE' => $scope2,
+    'JF_MAX' => (string) $max_att,
+    'JF_OUT' => $out_dir,
+);
+$auth_procs = array();
+$parallel = 12;
+for ($i = 0; $i < $parallel; $i++) {
+    $desc = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
+    $auth_procs[] = proc_open(PHP_BINARY . ' ' . escapeshellarg($auth_worker_file), $desc, $pipes, null, $auth_env + $_ENV);
+    if (is_resource($auth_procs[$i])) {
+        fclose($pipes[0]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+    }
+}
+foreach ($auth_procs as $proc) {
+    if (is_resource($proc)) {
+        proc_close($proc);
+    }
+}
+$allowed = 0;
+$blocked = 0;
+foreach (glob($out_dir . '*.json') ?: array() as $f) {
+    $r = json_decode(file_get_contents($f), true);
+    if (!empty($r['allowed'])) {
+        $allowed++;
+    } else {
+        $blocked++;
+    }
+}
+expect_true($allowed === $max_att, 'exactly max_attempts parallel begin_attempt allowed (got ' . $allowed . ')');
+expect_true($blocked === ($parallel - $max_att), 'remaining parallel attempts blocked (got ' . $blocked . ')');
+$_SERVER['REMOTE_ADDR'] = '198.51.100.10';
+unset($_SERVER['HTTP_X_FORWARDED_FOR'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
+$cfg['proxy_ip'] = array();
+expect_true(jirafeau_auth_is_blocked($scope2, $cfg, $max_att, 120), 'blocked for client after concurrent reservations');
+jirafeau_auth_clear_failures($scope2, $cfg);
+
 echo "== Compose passes restriction env keys ==\n";
 $compose = file_get_contents(JIRAFEAU_ROOT . 'docker-compose.yaml');
 expect_true(strpos($compose, 'ADMIN_IP:') !== false, 'docker-compose transmits ADMIN_IP');
